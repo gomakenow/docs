@@ -1,0 +1,69 @@
+/* Code blocks */
+:root {
+  --vp-code-font-size: 13px;
+  --vp-code-line-height: 1.7;
+}
+
+/* Slightly more breathing room in the doc body */
+.vp-doc p {
+  line-height: 1.75;
+  margin: 14px 0;
+}
+
+.vp-doc h2 {
+  margin-top: 48px;
+}
+
+.vp-doc h3 {
+  margin-top: 32px;
+  font-size: 1.05rem;
+}
+
+/* Make tables easier to scan */
+.vp-doc table {
+  font-size: 0.92rem;
+}
+
+.vp-doc table th {
+  white-space: nowrap;
+}
+
+/* Tighten code inside tables */
+.vp-doc td code,
+.vp-doc th code {
+  font-size: 0.82rem;
+}
+
+/* Custom containers — slightly softer */
+.custom-block {
+  border-radius: 8px;
+}
+
+/* Inline "required" / "optional" badges */
+.badge-required {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--vp-c-danger-soft);
+  color: var(--vp-c-danger-1);
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.badge-optional {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--vp-c-default-soft);
+  color: var(--vp-c-text-2);
+  margin-left: 4px;
+  vertical-align: middle;
+}
