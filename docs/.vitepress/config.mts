@@ -39,7 +39,16 @@ export default defineConfig({
               { text: 'Advanced', link: '/packages/query/advanced' },
             ],
           },
-          { text: 'storage', link: '/packages/storage' },
+          {
+            text: 'Storage',
+            collapsed: false,
+            items: [
+              { text: 'Getting started', link: '/packages/storage/' },
+              { text: 'Drivers', link: '/packages/storage/drivers' },
+              { text: 'Configuration', link: '/packages/storage/configuration' },
+              { text: 'Advanced', link: '/packages/storage/advanced' },
+            ],
+          },
           { text: 'mailing', link: '/packages/mailing' },
           { text: 'payment', link: '/packages/payment' },
           { text: 'discount', link: '/packages/discount' },
