@@ -102,7 +102,19 @@ storage.Drivers
 
 Every entry implements the same interface — `Put`, `Get`, `Delete`, `URL`, `SignedURL`. You pick the right one for the job and call it.
 
-For S3 buckets, use `sd.LookupS3("bucket-name")` to get the driver — do not access `S3ByBucket` directly.
+Local is one driver each (`sd.LocalPublic`, `sd.LocalPrivate`). S3 is different: `S3ByBucket` is a **map of bucket name → driver**. There is no single “the S3 driver.” Each configured bucket has its own driver object, bound to that bucket. `Put` / `Get` / `Delete` / `URL` / `SignedURL` live on that object, so you first pick the bucket you want, then call methods on the driver you got back.
+
+Use `sd.LookupS3("my-private-bucket")` for that lookup. It returns the driver for that name, or an error if the bucket was never listed in env. Do not range or index `S3ByBucket` yourself — `LookupS3` is the API.
+
+```go
+driver, err := sd.LookupS3("my-private-bucket")
+if err != nil {
+    // bucket not in STORAGE_S3_BUCKETS_PUBLIC or STORAGE_S3_BUCKETS_PRIVATE
+}
+
+err = driver.Put("avatars/user-42.png", fileBytes) // goes to that bucket only
+url, err := driver.SignedURL("avatars/user-42.png", 15*time.Minute)
+```
 
 ---
 
@@ -163,15 +175,14 @@ signedURL, err := driver.SignedURL(objectKey, 15*time.Minute)
 // → "http://localhost:8003/storage/private/?path=reports%2Fuser-42%2Fexport.csv&exp=1751234567&sig=<hmac>"
 ```
 
-When using `InitDrivers()`, access local drivers directly from `sd` and S3 drivers via `LookupS3`:
+When using `InitDrivers()`, local is a field on `sd`. S3 is not — look up the driver for the bucket, then call `Put` / `URL` / `SignedURL` on that driver:
 
 ```go
-// Local drivers
 driver := sd.LocalPublic
 driver := sd.LocalPrivate
 
-// S3 driver for a specific bucket
 driver, err := sd.LookupS3("my-private-bucket")
+err = driver.Put("avatars/user-42.png", fileBytes)
 ```
 
 ---
