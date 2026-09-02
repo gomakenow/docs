@@ -128,7 +128,7 @@ A convenience wrapper `VerifyPrivateSignedURLQuery(v url.Values, key []byte)` ex
 
 ## Adding a new driver
 
-If you need a third storage backend — Google Cloud Storage, Azure Blob, Backblaze B2 — the extension points are well-defined.
+You can easily add another storage backend. Local and S3 already follow one pattern: implement `StorageDriver`, load env, validate, then register the driver at startup. Do the same for a new provider and the rest of the app keeps calling `Put`, `Get`, `URL`, and `SignedURL` unchanged. The steps below use GCS as the example name.
 
 ### Step 1 — Implement the interface
 
