@@ -118,6 +118,78 @@ http://localhost:8003/storage/private/?path=uploads/a3/f1/user-42/550e8400.png&e
 
 When your handler receives the request, call `local.VerifySignedURLQuery(r.URL.Query())` on that `*LocalStorageDriver`. It checks that the current time is before `exp`, recomputes the HMAC, and compares it to `sig` using a constant-time comparison. If any check fails — wrong key, expired timestamp, tampered path — it returns an error and you should respond with 403. See [HMAC signing internals](./advanced#hmac-signing-internals) for the implementation details.
 
+#### Serving a private file
+
+This is the **download** route — `Put` already ran when you stored the file. The handler verifies the signed URL, runs your access check, reads the file from disk with `Get`, then writes it to the response.
+
+`VerifySignedURLQuery` lives on the **concrete** `*drivers.LocalStorageDriver`, not on the `StorageDriver` interface. That is why `main.go` type-asserts `sd.LocalPrivate` before passing it into the handler.
+
+```go
+// handlers/private_download.go
+
+func PrivateDownloadHandler(local *drivers.LocalStorageDriver) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // Only GET and HEAD — everything else is rejected up front.
+        if r.Method != http.MethodGet && r.Method != http.MethodHead {
+            http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+            return
+        }
+
+        // Step 1 — verify the signed URL (expiry + HMAC). Rejects tampered or expired links.
+        if err := local.VerifySignedURLQuery(r.URL.Query()); err != nil {
+            http.Error(w, err.Error(), http.StatusForbidden)
+            return
+        }
+
+        key := r.URL.Query().Get("path")
+        if key == "" {
+            http.Error(w, "missing path", http.StatusBadRequest)
+            return
+        }
+
+        // Step 2 — ACL: check the caller is allowed to read this specific file.
+        // The signature only proves the URL was issued by this server — it does not
+        // check who is asking. Enforce your own access rules here before reading disk.
+        //
+        //   if !canAccess(r, key) {
+        //       http.Error(w, "forbidden", http.StatusForbidden)
+        //       return
+        //   }
+
+        // Step 3 — serve the file.
+        ct := mime.TypeByExtension(filepath.Ext(key))
+        if ct == "" {
+            ct = "application/octet-stream"
+        }
+        w.Header().Set("Content-Type", ct)
+
+        data, err := local.Get(key)
+        if err != nil {
+            http.NotFound(w, r)
+            return
+        }
+        w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+        if r.Method == http.MethodHead {
+            w.WriteHeader(http.StatusOK)
+            return
+        }
+        _, _ = w.Write(data)
+    }
+}
+```
+
+In `main.go`, after `InitDrivers()`, assert the concrete type and register the route on the same URL prefix that `SignedURL` embeds in every link:
+
+```go
+// main.go
+
+// sd.LocalPrivate is typed as StorageDriver — assert to access VerifySignedURLQuery.
+local := sd.LocalPrivate.(*drivers.LocalStorageDriver)
+
+// Register the download handler under the same prefix SignedURL uses.
+http.HandleFunc(local.URLSuffix+"/", PrivateDownloadHandler(local))
+```
+
 ---
 
 ## The S3 driver
