@@ -49,6 +49,16 @@ export default defineConfig({
               { text: 'Advanced', link: '/packages/storage/advanced' },
             ],
           },
+          {
+            text: 'Media',
+            collapsed: false,
+            items: [
+              { text: 'Getting started', link: '/packages/media/' },
+              { text: 'Orphan cleanup', link: '/packages/media/orphans' },
+              { text: 'Reference', link: '/packages/media/reference' },
+              { text: 'Testing', link: '/packages/media/testing' },
+            ],
+          },
           { text: 'mailing', link: '/packages/mailing' },
           { text: 'payment', link: '/packages/payment' },
           { text: 'discount', link: '/packages/discount' },
