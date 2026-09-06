@@ -25,7 +25,7 @@ features:
     link: /packages/mailing
   - title: payment
     details: Gateway, Stripe / Lemon Squeezy / NowPayments / wallet, webhooks, refunds. You write checkout and fulfillment.
-    link: /packages/payment
+    link: /packages/payment/
   - title: discount
     details: Vouchers, referrals, per-product rates, payment snapshots. You write checkout UX.
     link: /packages/discount
