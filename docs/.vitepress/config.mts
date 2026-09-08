@@ -85,7 +85,18 @@ export default defineConfig({
               { text: 'Testing', link: '/packages/payment/testing' },
             ],
           },
-          { text: 'discount', link: '/packages/discount' },
+          {
+            text: 'Discount',
+            collapsed: false,
+            items: [
+              { text: 'Getting started', link: '/packages/discount/' },
+              { text: 'Creating discounts', link: '/packages/discount/create' },
+              { text: 'Resolving at checkout', link: '/packages/discount/resolve' },
+              { text: 'Fulfillment & history', link: '/packages/discount/fulfill' },
+              { text: 'Reference', link: '/packages/discount/reference' },
+              { text: 'Testing', link: '/packages/discount/testing' },
+            ],
+          },
         ],
       },
       {
