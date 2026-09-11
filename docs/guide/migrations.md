@@ -1,5 +1,7 @@
 # Migrations
 
+The engine that applies SQL is [dbmigrate](/packages/dbmigrate/). This page is only about **where kit SQL lives** in a GoMakeNow app and how it reaches the folder that engine runs.
+
 SQL for kit tables lives next to that folder (`payment/migration/`, `discount/migrations/`, `mailing/migrations/`). The migrator only runs `db/migrations/`, so you publish, then migrate:
 
 ```bash

@@ -10,6 +10,7 @@ You write HTTP, auth, GORM models, admin UI, and product rules. You call the eng
 |---|---|
 | [Architecture](./architecture) | What you write vs what already lives in the kit folders |
 | [Migrations](./migrations) | SQL under each kit folder, publish into `db/migrations/`, then migrate |
+| [dbmigrate](/packages/dbmigrate/) | The CLI/library that applies those SQL files |
 | [Packages](/packages/) | One page per folder. Filled in step by step |
 | [Cookbook](/cookbook/) | New admin table, new provider, new driver |
 

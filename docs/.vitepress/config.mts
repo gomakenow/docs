@@ -31,7 +31,7 @@ export default defineConfig({
           { text: 'Overview', link: '/packages/' },
           {
             text: 'Query',
-            collapsed: false,
+            collapsed: true,
             items: [
               { text: 'Getting started', link: '/packages/query/' },
               { text: 'Schema reference', link: '/packages/query/schema' },
@@ -41,7 +41,7 @@ export default defineConfig({
           },
           {
             text: 'Storage',
-            collapsed: false,
+            collapsed: true,
             items: [
               { text: 'Getting started', link: '/packages/storage/' },
               { text: 'Drivers', link: '/packages/storage/drivers' },
@@ -51,7 +51,7 @@ export default defineConfig({
           },
           {
             text: 'Media',
-            collapsed: false,
+            collapsed: true,
             items: [
               { text: 'Getting started', link: '/packages/media/' },
               { text: 'Orphan cleanup', link: '/packages/media/orphans' },
@@ -61,7 +61,7 @@ export default defineConfig({
           },
           {
             text: 'Mailing',
-            collapsed: false,
+            collapsed: true,
             items: [
               { text: 'Getting started', link: '/packages/mailing/' },
               { text: 'Queueing', link: '/packages/mailing/queue' },
@@ -73,7 +73,7 @@ export default defineConfig({
           },
           {
             text: 'Payment',
-            collapsed: false,
+            collapsed: true,
             items: [
               { text: 'Getting started', link: '/packages/payment/' },
               { text: 'Creating payments', link: '/packages/payment/create' },
@@ -86,8 +86,20 @@ export default defineConfig({
             ],
           },
           {
+            text: 'DBmigrate',
+            collapsed: true,
+            items: [
+              { text: 'Getting started', link: '/packages/dbmigrate/' },
+              { text: 'Commands', link: '/packages/dbmigrate/commands' },
+              { text: 'Library', link: '/packages/dbmigrate/library' },
+              { text: 'Drivers', link: '/packages/dbmigrate/drivers' },
+              { text: 'Reference', link: '/packages/dbmigrate/reference' },
+              { text: 'Testing', link: '/packages/dbmigrate/testing' },
+            ],
+          },
+          {
             text: 'Discount',
-            collapsed: false,
+            collapsed: true,
             items: [
               { text: 'Getting started', link: '/packages/discount/' },
               { text: 'Creating discounts', link: '/packages/discount/create' },
