@@ -5,12 +5,13 @@ Most of these are **folders in the scaffolded repo**, same Go module as your `ha
 [dbmigrate](./dbmigrate/) is different: it is a standalone module (`github.com/gomakenow/go-dbmigrate`). You install the CLI (or import the library). It is not a folder next to `payment/`.
 
 ::: info Filling in
-[Query](./query/), [storage](./storage/), [media](./media/), [mailing](./mailing/), [payment](./payment/), [discount](./discount/), and [dbmigrate](./dbmigrate/) are written.
+[Query](./query/), [storage](./storage/), [media](./media/), [mailing](./mailing/), [payment](./payment/), [discount](./discount/), [auth](./auth/), and [dbmigrate](./dbmigrate/) are written.
 :::
 
 | Folder / module | What it does | What you still write |
 |---|---|---|
-| [Query](./query/) | Cursor lists: filter, search, sort | Routes, auth, GORM models, JSON transformers |
+| [Auth](./auth/) | Session JWTs, password login, reset/verify links, TOTP, OAuth CSRF, HTTP middleware | Users table, HTTP routes, emails, Google/GitHub, roles |
+| [Query](./query/) | Cursor lists: filter, search, sort | Routes, GORM models, JSON transformers |
 | [storage](./storage/) | Local / S3 drivers, public vs private URLs | Upload HTTP, serving files, access control |
 | [media](./media/) | Atomic uploads + DB tracking, URL resolution, orphan cleanup | Object keys, ACLs, feature FK columns, schedule the cleanup job |
 | [mailing](./mailing/) | DB queue, worker, Mailgun/Mailtrap, optional tracking | Templates, audiences, consent, unsubscribe HTTP, attempt log |

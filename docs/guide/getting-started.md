@@ -1,8 +1,8 @@
 # Getting started
 
-GoMakeNow is a **repo you scaffold**. Folders like `query/`, `storage/`, `mailing/`, `payment/`, and `discount/` are already in that repo — same Go module as your handlers. They are not something you `go get` and wire up from outside.
+GoMakeNow is a **repo you scaffold**. Folders like `query/`, `storage/`, `mailing/`, `payment/`, `discount/`, and `auth/` are already in that repo — same Go module as your handlers. They are not something you `go get` and wire up from outside.
 
-You write HTTP, auth, GORM models, admin UI, and product rules. You call the engines that shipped with the kit. You do not reimplement cursor pagination or a Stripe client.
+You write HTTP, GORM models, admin UI, and product rules. You call the engines that shipped with the kit. You do not reimplement cursor pagination, JWT login, or a Stripe client.
 
 ## How to read this site
 

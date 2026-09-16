@@ -4,7 +4,7 @@ layout: home
 hero:
   name: GoMakeNow
   text: A Go boilerplate
-  tagline: Scaffold the repo and query, payment, mailing, storage, and discount are already in it. You write routes, models, and product rules — not list engines or Stripe clients.
+  tagline: Scaffold the repo and query, payment, mailing, storage, discount, and auth are already in it. You write routes, models, and product rules — not list engines or Stripe clients.
   actions:
     - theme: brand
       text: Get started
@@ -14,6 +14,9 @@ hero:
       link: /packages/
 
 features:
+  - title: auth
+    details: JWT sessions, password login, reset/verify links, TOTP. You write the users table and HTTP routes.
+    link: /packages/auth/
   - title: query
     details: Cursor pagination, filters, search, and sort. Put Schema() on your model; List does the rest.
     link: /packages/query

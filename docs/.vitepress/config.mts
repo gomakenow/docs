@@ -30,6 +30,19 @@ export default defineConfig({
         items: [
           { text: 'Overview', link: '/packages/' },
           {
+            text: 'Auth',
+            collapsed: true,
+            items: [
+              { text: 'Getting started', link: '/packages/auth/' },
+              { text: 'Middleware', link: '/packages/auth/middleware' },
+              { text: 'Sessions', link: '/packages/auth/sessions' },
+              { text: 'Email links', link: '/packages/auth/credentials' },
+              { text: '2FA and OAuth', link: '/packages/auth/totp' },
+              { text: 'Reference', link: '/packages/auth/reference' },
+              { text: 'Testing', link: '/packages/auth/testing' },
+            ],
+          },
+          {
             text: 'Query',
             collapsed: true,
             items: [

@@ -2,18 +2,19 @@
 
 The engine that applies SQL is [dbmigrate](/packages/dbmigrate/). This page is only about **where kit SQL lives** in a GoMakeNow app and how it reaches the folder that engine runs.
 
-SQL for kit tables lives next to that folder (`payment/migration/`, `discount/migrations/`, `mailing/migrations/`). The migrator only runs `db/migrations/`, so you publish, then migrate:
+SQL for kit tables lives next to that folder (`payment/migration/`, `discount/migrations/`, `mailing/migrations/`, `auth/migrations/`). The migrator only runs `db/migrations/`, so you publish, then migrate:
 
 ```bash
 make -C payment migrate-publish
 make -C discount migrate-publish
 make -C mailing migrate-publish
+make -C auth migrate-publish
 # optional: TARGET_DIR=/path/to/db/migrations
 ```
 
 Publish re-timestamps files after the latest file already in the target dir and **skips slugs that already exist**. New kit migrations still land; files you already published are not overwritten.
 
-`query/` has **no tables**. `storage/` has **no tables** (files live on disk or in S3; media rows are yours).
+`query/` has **no tables**. `storage/` has **no tables** (files live on disk or in S3; media rows are yours). `auth/` adds `password_reset_tokens` (a string subject key, usually an email — no foreign key to your users table).
 
 ## Default: bigint ids on your catalog
 
