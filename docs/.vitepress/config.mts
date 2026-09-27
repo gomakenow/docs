@@ -43,6 +43,21 @@ export default defineConfig({
             ],
           },
           {
+            text: 'ACL',
+            collapsed: true,
+            items: [
+              { text: 'Getting started', link: '/packages/acl/' },
+              { text: 'Roles and grants', link: '/packages/acl/roles' },
+              { text: 'Displaying access', link: '/packages/acl/screens' },
+              { text: 'People and machines', link: '/packages/acl/subjects' },
+              { text: 'Superadmin', link: '/packages/acl/superadmin' },
+              { text: 'Gating routes', link: '/packages/acl/http' },
+              { text: 'Cache', link: '/packages/acl/cache' },
+              { text: 'Reference', link: '/packages/acl/reference' },
+              { text: 'Testing', link: '/packages/acl/testing' },
+            ],
+          },
+          {
             text: 'Query',
             collapsed: true,
             items: [

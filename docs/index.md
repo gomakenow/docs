@@ -4,7 +4,7 @@ layout: home
 hero:
   name: GoMakeNow
   text: A Go boilerplate
-  tagline: Scaffold the repo and query, payment, mailing, storage, discount, and auth are already in it. You write routes, models, and product rules — not list engines or Stripe clients.
+  tagline: Scaffold the repo and query, payment, mailing, storage, discount, auth, and acl are already in it. You write routes, models, and product rules — not list engines or Stripe clients.
   actions:
     - theme: brand
       text: Get started
@@ -14,22 +14,25 @@ hero:
       link: /packages/
 
 features:
-  - title: auth
-    details: JWT sessions, password login, reset/verify links, TOTP. You write the users table and HTTP routes.
+  - title: Auth
+    details: Log people in with passwords or email links. Reset forgotten passwords. Add two-factor authentication.
     link: /packages/auth/
-  - title: query
-    details: Cursor pagination, filters, search, and sort. Put Schema() on your model; List does the rest.
+  - title: ACL
+    details: Control who can do what. Define permissions, create roles, assign them to people. No more admin flags.
+    link: /packages/acl/
+  - title: Query
+    details: Build admin lists that your team can filter, search, sort, and page through.
     link: /packages/query
-  - title: storage
-    details: Local disk and S3 drivers. Public vs private URLs. You write upload HTTP and media rows.
+  - title: Storage
+    details: Store files securely on disk or in the cloud. Serve public files or require login for private ones.
     link: /packages/storage
-  - title: mailing
-    details: Outbound queue, Mailgun / Mailtrap, retries. You render HTML and decide who gets mail.
+  - title: Mailing
+    details: Send emails reliably. The system retries if a mail provider hiccups, so no email is lost.
     link: /packages/mailing
-  - title: payment
-    details: Gateway, Stripe / Lemon Squeezy / NowPayments / wallet, webhooks, refunds. You write checkout and fulfillment.
+  - title: Payment
+    details: Accept payments from Stripe, Lemon Squeezy, or crypto wallets. Webhooks and refunds are handled.
     link: /packages/payment/
-  - title: discount
-    details: Vouchers, referrals, per-product rates, payment snapshots. You write checkout UX.
+  - title: Discount
+    details: Run voucher and referral campaigns. Track what each buyer actually saved when they purchased.
     link: /packages/discount
 ---

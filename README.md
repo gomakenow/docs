@@ -1,6 +1,6 @@
 # GoMakeNow Documentation
 
-VitePress site for **GoMakeNow**, a Go boilerplate. After scaffold, `query/`, `storage/`, `mailing/`, `payment/`, `discount/`, and `auth/` are folders in that repo (same Go module) — not outside `go.mod` libraries.
+VitePress site for **GoMakeNow**, a Go boilerplate. After scaffold, `query/`, `storage/`, `mailing/`, `payment/`, `discount/`, `auth/`, and `acl/` are folders in that repo (same Go module) — not outside `go.mod` libraries.
 
 ## Local development
 
@@ -24,7 +24,7 @@ Guide
   Migrations       publish kit SQL into db/migrations
 
 Packages
-  query, storage, mailing, payment, discount, auth
+  query, storage, mailing, payment, discount, auth, acl
 
 Cookbook
   New admin table

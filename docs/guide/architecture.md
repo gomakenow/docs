@@ -6,12 +6,12 @@ After you scaffold, the repo already contains the kit folders. Your app code sit
 Your handlers / admin UI / product rules
         │
         ▼
-┌─────────┐  ┌─────────────┐  ┌──────────┐  ┌─────────┐  ┌─────────┐  ┌──────────┐
-│  auth/  │  │  payment/   │  │ discount/│  │ mailing/│  │ storage/│  │  query/  │
-│ Engine  │  │   Gateway   │  │  Engine  │  │ Engine  │  │ drivers │  │ List[T]  │
-└────┬────┘  └──────┬──────┘  └────┬─────┘  └────┬────┘  └────┬────┘  └────┬─────┘
-     │              │              │             │            │            │
-     └──────────────┴──────────────┴─────────────┴────────────┴────────────┘
+┌─────────┐  ┌─────────────┐  ┌──────────┐  ┌─────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐
+│  auth/  │  │  payment/   │  │ discount/│  │ mailing/│  │ storage/│  │  query/  │  │  acl/   │
+│ Engine  │  │   Gateway   │  │  Engine  │  │ Engine  │  │ drivers │  │ List[T]  │  │ Engine  │
+└────┬────┘  └──────┬──────┘  └────┬─────┘  └────┬────┘  └────┬────┘  └────┬─────┘  └────┬────┘
+     │              │              │             │            │            │            │
+     └──────────────┴──────────────┴─────────────┴────────────┴────────────┴────────────┘
                                           │
                     PostgreSQL (kit tables + your users / orders / products)
 ```
@@ -22,7 +22,7 @@ Your handlers / admin UI / product rules
 |---|---|
 | Engines, providers/drivers, kit tables, sentinel errors, webhook *verification* | HTTP routes, admin UI, product rules, fulfillment, which providers are on |
 
-Call the folder’s public surface (`query.List`, `auth.Engine`, `payment.Gateway`, `mailing.Engine`, a storage driver). Do not import Stripe or Mailgun from a handler. Tests pass a mock of that surface.
+Call the folder’s public surface (`query.List`, `auth.Engine`, `acl.Engine`, `payment.Gateway`, `mailing.Engine`, a storage driver). Do not import Stripe or Mailgun from a handler. Tests pass a mock of that surface.
 
 Your catalog ids (`orders`, `users`, `products`) are foreign keys **into your tables**. The kit stores them as `bigint` / `int64`. If your primary keys are UUID (or anything else), edit the published columns and FKs in `db/migrations/` before the first migrate — see [Migrations](./migrations).
 
