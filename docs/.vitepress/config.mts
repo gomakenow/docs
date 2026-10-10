@@ -137,6 +137,20 @@ export default defineConfig({
               { text: 'Testing', link: '/packages/discount/testing' },
             ],
           },
+          {
+            text: 'AI Support',
+            collapsed: true,
+            items: [
+              { text: 'Getting started', link: '/packages/aisupport/' },
+              { text: 'Chat and conversations', link: '/packages/aisupport/chat' },
+              { text: 'Documentation search', link: '/packages/aisupport/docs' },
+              { text: 'LLM and retrieval', link: '/packages/aisupport/llm' },
+              { text: 'Analytics', link: '/packages/aisupport/analytics' },
+              { text: 'Configuration', link: '/packages/aisupport/config' },
+              { text: 'Error handling', link: '/packages/aisupport/errors' },
+              { text: 'Reference', link: '/packages/aisupport/reference' },
+            ],
+          },
         ],
       },
       {
