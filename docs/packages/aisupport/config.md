@@ -84,24 +84,7 @@ ChatConfig{
 }
 ```
 
-### Website identity and system prompt
-
-**`WebsiteName`** and **`WebsiteAddress`** — When left empty, the package uses values from the top-level `aisupport.Config`. When you set them on the chat config, they override the top-level values.
-
-```go
-ChatConfig{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
-}
-```
-
-**`SystemPrompt`** — Optional extra text appended after the built-in prompt. The built-in prompt always includes the `[[CODE]]`, `[[USED]]`, and `[[NO_ANSWER]]` rules the package parses. Leave this empty unless you need additional instructions.
-
-```go
-ChatConfig{
-    SystemPrompt: "For security questions, always recommend contacting our security team.",
-}
-```
+**`WebsiteName`**, **`WebsiteAddress`**, and **`SystemPrompt`** — These control the system prompt. When `WebsiteName` and `WebsiteAddress` are empty on the chat config, the package uses values from the top-level `aisupport.Config`. `SystemPrompt` is optional text appended after the built-in prompt (see the [Website identity](#website-identity) section above for details).
 
 ### Optional tuning fields
 
