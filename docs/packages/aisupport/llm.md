@@ -86,10 +86,13 @@ The package generates the prompt automatically using your website identity:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
-    Chat:           aisupport.ChatConfig{DB: db, LLM: callOpenRouter},
-    Docs:           aisupport.DocsConfig{DB: db},
+    DB: db,
+    Chat: aisupport.ChatConfig{
+        LLM:            callOpenRouter,
+        WebsiteName:    "Acme",
+        WebsiteAddress: "https://acme.example",
+    },
+    Docs: aisupport.DocsConfig{},
 })
 ```
 
@@ -156,11 +159,11 @@ Pass it to aisupport:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
+    DB: db,
     Chat: aisupport.ChatConfig{
-        DB:  db,
-        LLM: callOpenRouter,
+        LLM:            callOpenRouter,
+        WebsiteName:    "Acme",
+        WebsiteAddress: "https://acme.example",
     },
     Docs: aisupport.DocsConfig{...},
 })
@@ -217,6 +220,7 @@ func customRetriever(ctx context.Context, req aisupport.RetrieveRequest) ([]aisu
 }
 
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Chat: aisupport.ChatConfig{
         Retrieve: customRetriever,  // Use custom retriever instead of docs search
         // ...
@@ -287,6 +291,7 @@ func callTrackedOpenRouter(ctx context.Context, req aisupport.LLMRequest) (aisup
 }
 
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Chat: aisupport.ChatConfig{
         LLM: callTrackedOpenRouter,
         // ...
@@ -320,6 +325,7 @@ Control how much context the LLM receives:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Chat: aisupport.ChatConfig{
         HistoryLimit:    10,      // How many previous messages to include (default 10)
         RetrieveLimit:   5,       // How many doc chunks to include (default 5)
@@ -351,16 +357,15 @@ func callOpenRouter(ctx context.Context, req aisupport.LLMRequest) (aisupport.LL
 
 // 2. Initialize aisupport. The built-in prompt names the website.
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
+    DB: db,
     Chat: aisupport.ChatConfig{
-        DB:            db,
-        LLM:           callOpenRouter,
-        HistoryLimit:  10,
-        RetrieveLimit: 5,
+        LLM:            callOpenRouter,
+        WebsiteName:    "Acme",
+        WebsiteAddress: "https://acme.example",
+        HistoryLimit:   10,
+        RetrieveLimit:  5,
     },
     Docs: aisupport.DocsConfig{
-        DB:            db,
         WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
         Repos: []aisupport.Repo{
             {Owner: "mycompany", Name: "docs", Ref: "main", DocsRoot: "docs", BaseURL: "https://docs.example.com"},

@@ -5,7 +5,7 @@ description: Tune behavior, defaults, and limits to fit your needs.
 
 # Configuration
 
-The aisupport package works with sensible defaults out of the box. Every configuration option is optional — start with defaults and tune later only if you have specific needs.
+The aisupport package works with sensible defaults out of the box. `DB` and an LLM function are required. Start with the other defaults and tune later only if you have specific needs.
 
 ---
 
@@ -15,19 +15,20 @@ The aisupport system has two separate engines: one for chat and one for document
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
+    DB: db,
     Chat: aisupport.ChatConfig{
-        DB:  db,
-        LLM: callOpenRouter,
+        LLM:            callOpenRouter,
+        WebsiteName:    "Acme",
+        WebsiteAddress: "https://acme.example",
     },
     Docs: aisupport.DocsConfig{
-        DB:            db,
         WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
         Repos: []aisupport.Repo{...},
     },
 })
 ```
+
+`DB` is the PostgreSQL connection both engines share. It is required. If it is nil, `Init` stops the process. `Init` passes that connection to the chat engine and the docs engine. Do not set a separate database on either config.
 
 **Chat configuration** controls how conversations are stored and answered: which LLM to use, how much history to remember, how many docs to include, and what limits to enforce. See [Chat configuration](#chat-configuration) below.
 
@@ -39,22 +40,26 @@ The two engines integrate automatically: when you ask a question, the chat engin
 
 ## Website identity
 
-Pass your website name and public address at the top level:
+Set the website name and public address on the chat config. The package writes them into the built-in system prompt when the chat engine starts:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
+    DB: db,
+    Chat: aisupport.ChatConfig{
+        LLM:            callOpenRouter,
+        WebsiteName:    "Acme",
+        WebsiteAddress: "https://acme.example",
+    },
     // ...
 })
 ```
 
-These values are written into the built-in system prompt. The package generates a system prompt that:
+The generated prompt:
 - Names the assistant: "You are Acme's support assistant"
 - Sets the scope: "Stay inside Acme: https://acme.example, its documentation, ..."
-- Includes parsing rules: `[[CODE]]`, `[[USED:n,n]]`, `[[NO_ANSWER]]` (automatically appended)
+- Always includes the parsing rules: `[[CODE]]`, `[[USED:n,n]]`, and `[[NO_ANSWER]]`
 
-Leave either field empty and that part of the prompt stays generic ("this product"). The package owns the system prompt — you cannot override the marker rules, which are essential for the package to work correctly.
+Leave either field empty and that part of the prompt stays generic ("this product"). The package owns the system prompt. You cannot replace the marker rules.
 
 ::: info
 The package generates the system prompt automatically to ensure it always includes the token parsing rules. Don't write the system prompt yourself. Pass `SystemPrompt` in `ChatConfig` only if you need to append optional extra instructions.
@@ -64,17 +69,9 @@ The package generates the system prompt automatically to ensure it always includ
 
 ## Chat configuration
 
-The chat engine stores conversations and answers questions. Configuration controls which database to use, which LLM provider to call, how much history to send, how many docs to include, and what limits to enforce.
+The chat engine stores conversations and answers questions. Configuration controls which LLM provider to call, how much history to send, how many docs to include, and what limits to enforce. The database comes from `aisupport.Config.DB`.
 
 ### Required fields
-
-**`DB`** — Your PostgreSQL connection. Must have aisupport tables (run migrations first).
-
-```go
-ChatConfig{
-    DB: db,  // *gorm.DB
-}
-```
 
 **`LLM`** — Your LLM provider function. This bridges to OpenRouter, OpenAI, Claude, or any provider. See [LLM and retrieval](./llm.md) for implementation details.
 
@@ -83,8 +80,6 @@ ChatConfig{
     LLM: callOpenRouter,  // func(ctx, req) -> (resp, err)
 }
 ```
-
-**`WebsiteName`**, **`WebsiteAddress`**, and **`SystemPrompt`** — These control the system prompt. When `WebsiteName` and `WebsiteAddress` are empty on the chat config, the package uses values from the top-level `aisupport.Config`. `SystemPrompt` is optional text appended after the built-in prompt (see the [Website identity](#website-identity) section above for details).
 
 ### Optional tuning fields
 
@@ -196,20 +191,7 @@ The docs engine indexes and searches documentation. Configuration controls which
 
 ### Required or conditional fields
 
-**`DB` or `DSN`** — One is required.
-
-- `DB`: Reuse your existing PostgreSQL pool (recommended)
-- `DSN`: Connection string; the package opens its own connection
-
-```go
-DocsConfig{
-    DB: db,  // Recommended: reuse pool
-}
-
-DocsConfig{
-    DSN: "postgres://user:pass@localhost/dbname",  // Alternative: package opens connection
-}
-```
+The database is `aisupport.Config.DB`. `Init` passes it to the docs engine. `DocsConfig.DB` and `DocsConfig.DSN` are for `NewDocs`, when you build the docs engine on its own. `DSN` is a connection string the package opens when `DB` is nil.
 
 **`WebhookSecret`** — Required unless every repository sets its own `WebhookSecret`.
 
@@ -314,18 +296,17 @@ Minimize token usage and LLM costs:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
+    DB: db,
     Chat: aisupport.ChatConfig{
-        DB:              db,
         LLM:             callOpenRouter,
+        WebsiteName:     "Acme",
+        WebsiteAddress:  "https://acme.example",
         HistoryLimit:    5,        // Less history
         RetrieveLimit:   3,        // Fewer docs
         MaxContextChars: 8000,     // Tight budget
         MaxQuestionLen:  1000,     // Shorter questions
     },
     Docs: aisupport.DocsConfig{
-        DB:         db,
         ContactLLM: nil,  // No embeddings (no extra LLM calls)
     },
 })
@@ -337,18 +318,17 @@ Prioritize answer quality over cost:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
+    DB: db,
     Chat: aisupport.ChatConfig{
-        DB:              db,
         LLM:             callOpenRouter,
+        WebsiteName:     "Acme",
+        WebsiteAddress:  "https://acme.example",
         HistoryLimit:    20,       // Full context
         RetrieveLimit:   8,        // Lots of docs
         MaxContextChars: 20000,    // Generous budget
         MaxQuestionLen:  5000,     // Allow detailed questions
     },
     Docs: aisupport.DocsConfig{
-        DB:         db,
         ContactLLM: generateEmbedding,  // Semantic search
     },
 })
@@ -360,15 +340,14 @@ Good defaults for most apps:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
+    DB: db,
     Chat: aisupport.ChatConfig{
-        DB:  db,
-        LLM: callOpenRouter,
+        LLM:            callOpenRouter,
+        WebsiteName:    "Acme",
+        WebsiteAddress: "https://acme.example",
         // Use defaults for everything else
     },
     Docs: aisupport.DocsConfig{
-        DB:            db,
         WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
         Repos: []aisupport.Repo{
             {Owner: "mycompany", Name: "docs", Ref: "main", DocsRoot: "docs", BaseURL: "https://docs.example.com"},
@@ -379,58 +358,6 @@ engine, err := aisupport.Init(aisupport.Config{
 ```
 
 Start here. Measure performance and costs. Adjust if needed.
-
----
-
-## Environment-based configuration
-
-Load settings from environment variables:
-
-```go
-config := aisupport.Config{
-    WebsiteName:    os.Getenv("AISUPPORT_WEBSITE_NAME"),
-    WebsiteAddress: os.Getenv("WEBSITE_URL"),
-    Chat: aisupport.ChatConfig{
-        DB:              db,
-        LLM:             callOpenRouter,
-        HistoryLimit:    parseIntEnv("AISUPPORT_HISTORY_LIMIT", 10),
-        RetrieveLimit:   parseIntEnv("AISUPPORT_RETRIEVE_LIMIT", 5),
-        MaxQuestionLen:  parseIntEnv("AISUPPORT_MAX_QUESTION_LEN", 2000),
-        MaxContextChars: parseIntEnv("AISUPPORT_MAX_CONTEXT_CHARS", 12000),
-    },
-    Docs: aisupport.DocsConfig{
-        DB:            db,
-        WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
-        SearchLimit:   parseIntEnv("AISUPPORT_SEARCH_LIMIT", 5),
-        ContactLLM:    embeddingFunc,
-    },
-}
-
-engine, err := aisupport.Init(config)
-
-func parseIntEnv(key string, defaultValue int) int {
-    val := os.Getenv(key)
-    if val == "" {
-        return defaultValue
-    }
-    n, _ := strconv.Atoi(val)
-    return n
-}
-```
-
-Use `.env` files in development:
-
-```
-AISUPPORT_WEBSITE_NAME=Acme
-WEBSITE_URL=https://acme.example
-AISUPPORT_HISTORY_LIMIT=10
-AISUPPORT_RETRIEVE_LIMIT=5
-AISUPPORT_MAX_QUESTION_LEN=2000
-AISUPPORT_MAX_CONTEXT_CHARS=12000
-AISUPPORT_SEARCH_LIMIT=5
-GITHUB_WEBHOOK_SECRET=whsec_...
-GITHUB_TOKEN=ghp_...
-```
 
 ---
 
@@ -472,8 +399,8 @@ Most apps never tune. Defaults are well-chosen for the common case.
 
 When you initialize the engine, the package applies these rules:
 
-1. **Top-level identity fields** (`WebsiteName`, `WebsiteAddress`) are copied to the chat config if the chat config fields are empty.
-2. **Database** — If `Chat.DB` is nil, the package uses `Docs.DB`.
+1. **Database** — `DB` is required. `Init` passes it to both engines. A nil `DB` stops the process.
+2. **Website identity** — `Chat.WebsiteName` and `Chat.WebsiteAddress` are written into the built-in system prompt. Leave either one empty and that part of the prompt stays generic.
 3. **Retriever** — If `Chat.Retrieve` is nil, the package searches the docs engine.
 4. **Zero-value limits** — Zero means use the built-in default (e.g., 10 for `HistoryLimit`, 5 for `RetrieveLimit`).
 5. **Negative values** — Pass -1 to disable a limit entirely (e.g., `HistoryLimit: -1` includes all history).

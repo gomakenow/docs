@@ -23,6 +23,7 @@ resp, err := engine.Chat.Ask(ctx, aisupport.AskRequest{
         ID:   fmt.Sprintf("%d", user.ID),
     },
     Question: "How do I integrate webhooks?",
+    Client:   aisupport.ClientWebsite,
 })
 if err != nil {
     return err
@@ -37,14 +38,19 @@ if err != nil {
 The `Ask` method:
 1. Validates the question (non-empty, under length limit)
 2. Validates the owner (must be OwnerUser or OwnerGuest with a non-empty ID)
-3. Creates a new conversation (if ConversationID is 0) or loads the existing one
-4. Stores the question
-5. Retrieves documentation chunks
-6. Assembles a prompt with system prompt, history, docs, and question
-7. Calls your LLM function
-8. Parses the response to extract citations and escalation markers
-9. Stores the answer and sources
-10. Returns everything to display to the user
+3. Validates the client
+4. Creates a new conversation (if ConversationID is 0) or loads the existing one
+5. Stores the question
+6. Retrieves documentation chunks
+7. Assembles a prompt with system prompt, history, docs, and question
+8. Calls your LLM function
+9. Parses the response to extract citations and escalation markers
+10. Stores the answer and sources
+11. Returns everything to display to the user
+
+::: info
+`Client` is `website`, `doc-site`, or `mobile`. An empty value is stored as `website`. Anything else returns `ErrInvalidClient` and writes nothing. `Ask` stores that client on the question and the reply, in `source`. A later turn can use a different client.
+:::
 
 All in one call. The user gets an instant response, and the conversation is saved.
 
@@ -246,6 +252,7 @@ When the user asks a follow-up, how much history does the LLM see?
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Chat: aisupport.ChatConfig{
         HistoryLimit: 20,  // Include more history
         // ...
@@ -258,6 +265,7 @@ engine, err := aisupport.Init(aisupport.Config{
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Chat: aisupport.ChatConfig{
         MaxContextChars: 8000,  // Tighter budget, lower cost
         // ...

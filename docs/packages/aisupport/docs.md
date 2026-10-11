@@ -134,8 +134,8 @@ Point the system at your documentation repositories:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Docs: aisupport.DocsConfig{
-        DB:            db,
         WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
         Repos: []aisupport.Repo{
             {
@@ -148,7 +148,6 @@ engine, err := aisupport.Init(aisupport.Config{
         },
     },
     Chat: aisupport.ChatConfig{
-        DB:  db,
         LLM: callOpenRouter,
     },
 })
@@ -257,8 +256,8 @@ func generateEmbedding(model, text string, provider *string) (string, error) {
 }
 
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Docs: aisupport.DocsConfig{
-        DB:         db,
         ContactLLM: generateEmbedding,  // Enable semantic search
         // ... rest of config
     },
@@ -283,8 +282,8 @@ Not all documentation comes from GitHub. FAQ articles, KB entries, or product do
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Docs: aisupport.DocsConfig{
-        DB:            db,
         WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
         Repos: []aisupport.Repo{  // GitHub docs
             {Owner: "mycompany", Name: "docs", Ref: "main", DocsRoot: "docs", BaseURL: "https://docs.example.com"},
@@ -392,8 +391,8 @@ A typical setup:
 ```go
 // Initialize with documentation
 engine, err := aisupport.Init(aisupport.Config{
+    DB: db,
     Docs: aisupport.DocsConfig{
-        DB:            db,
         WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
         Repos: []aisupport.Repo{
             {
@@ -407,7 +406,6 @@ engine, err := aisupport.Init(aisupport.Config{
         ContactLLM: generateEmbedding,  // Semantic search
     },
     Chat: aisupport.ChatConfig{
-        DB:  db,
         LLM: callOpenRouter,
     },
 })

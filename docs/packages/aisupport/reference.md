@@ -15,7 +15,7 @@ This page contains the complete API reference: every type, method, and function 
 engine, err := aisupport.Init(cfg aisupport.Config) (*aisupport.Engine, error)
 ```
 
-Builds both the docs and chat engines. `cfg.Chat.DB` defaults to `cfg.Docs.DB` if unset. `cfg.Chat.Retrieve` defaults to searching the docs engine if unset.
+Builds both the docs and chat engines. `DB` is required and is passed to both engines. A nil `DB` stops the process. `cfg.Chat.Retrieve` defaults to searching the docs engine if unset.
 
 ```go
 chat, err := aisupport.NewChat(cfg aisupport.ChatConfig) (*aisupport.ChatEngine, error)
@@ -41,7 +41,7 @@ resp, err := engine.Chat.Ask(ctx context.Context, req AskRequest) (*AskResponse,
 
 Stores the question, retrieves docs, calls the LLM, stores the answer, and returns it.
 
-**Errors:** `ErrEmptyQuestion`, `ErrQuestionTooLong`, `ErrInvalidOwner`, `ErrConversationNotFound`, `ErrRetrieveFailed`, `ErrLLMFailed`.
+**Errors:** `ErrEmptyQuestion`, `ErrQuestionTooLong`, `ErrInvalidOwner`, `ErrInvalidClient`, `ErrConversationNotFound`, `ErrRetrieveFailed`, `ErrLLMFailed`.
 
 ### Messages
 
@@ -268,6 +268,7 @@ type AskRequest struct {
     ConversationID uint
     Owner          Owner
     Question       string
+    Client         Client // empty is website
 }
 ```
 
@@ -300,15 +301,28 @@ type Message struct {
     ID             uint
     ConversationID uint
     Role           string      // RoleUser or RoleAssistant
+    Client         Client      // Column and JSON name: source
     Content        string
     Sources        Sources     // For assistant messages
     Reaction       string      // "like", "dislike", or empty
     CreatedAt      time.Time
 }
 
+type Client string
+
+const (
+    ClientWebsite Client = "website"
+    ClientDocSite Client = "doc-site"
+    ClientMobile  Client = "mobile"
+)
+
+func ParseClient(value string) (Client, error)
+
 const RoleUser = "user"
 const RoleAssistant = "assistant"
 ```
+
+`ParseClient` accepts `website`, `doc-site`, and `mobile`. A blank value is `website`. Anything else is `ErrInvalidClient`.
 
 ### Sources
 
@@ -429,10 +443,9 @@ type Source struct {
 
 ```go
 type Config struct {
-    WebsiteName    string      // Product name for the system prompt
-    WebsiteAddress string      // Public site address for the system prompt
-    Docs           DocsConfig  // Documentation engine configuration
-    Chat           ChatConfig  // Chat engine configuration
+    DB   *gorm.DB    // Required. Passed to both engines. Nil stops the process.
+    Docs DocsConfig  // Documentation engine configuration
+    Chat ChatConfig  // Chat engine configuration
 }
 ```
 
@@ -440,11 +453,11 @@ type Config struct {
 
 ```go
 type ChatConfig struct {
-    DB              *gorm.DB         // PostgreSQL connection (required)
+    DB              *gorm.DB         // Set by Init. Required when calling NewChat directly.
     LLM             LLMFunc          // LLM provider function (required)
     Retrieve        RetrieveFunc     // Documentation retriever (default: docs engine)
-    WebsiteName     string           // Copied from Config.WebsiteName if empty
-    WebsiteAddress  string           // Copied from Config.WebsiteAddress if empty
+    WebsiteName     string           // Written into the built-in system prompt
+    WebsiteAddress  string           // Written into the built-in system prompt
     SystemPrompt    string           // Optional text appended after built-in prompt
     HistoryLimit    int              // Max messages sent to LLM (0 = 10, -1 = all)
     RetrieveLimit   int              // Max doc chunks to include (0 = 5)
@@ -457,7 +470,7 @@ type ChatConfig struct {
 
 ```go
 type DocsConfig struct {
-    DB            *gorm.DB      // PostgreSQL connection (required if DSN is empty)
+    DB            *gorm.DB      // Set by Init. For NewDocs, set this or DSN.
     DSN           string        // Connection string (alternative to DB)
     Repos         []Repo        // Fixed repositories to index
     RawSources    []Source      // Custom chunk sources to index
@@ -531,6 +544,7 @@ var (
     ErrEmptyQuestion       error
     ErrQuestionTooLong     error
     ErrInvalidOwner        error
+    ErrInvalidClient       error
     ErrConversationNotFound error
     ErrRetrieveFailed      error
     ErrLLMFailed           error
@@ -570,6 +584,7 @@ var (
 - `id` (uuid, primary key)
 - `conversation_id` (uuid, foreign key)
 - `role` (varchar, "user" or "assistant")
+- `source` (varchar, "website", "doc-site", or "mobile"; default "website")
 - `content` (text)
 - `sources` (jsonb, null for user messages)
 - `reaction` (varchar, null by default)

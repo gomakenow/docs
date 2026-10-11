@@ -1,6 +1,6 @@
 ---
 title: Getting started
-description: Four steps to add AI-powered support chat to your application.
+description: Three steps to add AI-powered support chat to your application.
 ---
 
 # Getting started
@@ -11,7 +11,7 @@ Most apps rely on a help email or support tickets: users ask, humans respond. Th
 
 The `aisupport` package answers common questions instantly using your own documentation. When a user asks "How do I set up webhooks?", the system searches your docs, feeds the relevant sections to an LLM, and delivers a sourced answer in seconds. Users get help immediately. Your team handles only the hard cases.
 
-In four steps, you will have a working support chat.
+In three steps, you will have a working support chat.
 
 ---
 
@@ -28,32 +28,14 @@ This creates tables for conversations, messages, and documentation chunks.
 
 ---
 
-## Step 2 — Name the website
-
-The package owns the system prompt, including the copy-block, citation, and handoff markers it parses. Pass your website name and public address so those sentences name your product:
-
-```go
-engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
-    // ...
-})
-```
-
-Leave either one empty and the prompt stays generic ("this product") for that part. You do not write the marker rules yourself.
-
----
-
-## Step 3 — Initialize the engine
+## Step 2 — Initialize the engine
 
 Call `aisupport.Init` once at startup:
 
 ```go
 engine, err := aisupport.Init(aisupport.Config{
-    WebsiteName:    "Acme",
-    WebsiteAddress: "https://acme.example",
+    DB: db,
     Docs: aisupport.DocsConfig{
-        DB:            db,
         WebhookSecret: os.Getenv("GITHUB_WEBHOOK_SECRET"),
         Repos: []aisupport.Repo{
             {
@@ -63,8 +45,9 @@ engine, err := aisupport.Init(aisupport.Config{
         },
     },
     Chat: aisupport.ChatConfig{
-        DB:  db,
-        LLM: callOpenRouter, // Your LLM provider call
+        LLM:            callOpenRouter, // Your LLM provider call
+        WebsiteName:    "Acme",
+        WebsiteAddress: "https://acme.example",
         // Retrieve defaults to searching the docs engine
         // HistoryLimit defaults to 10
         // RetrieveLimit defaults to 5
@@ -78,15 +61,19 @@ if err != nil {
 ```
 
 The engine uses sensible defaults. You only need to provide:
-- `DB` — Your database connection
+- `DB` — The PostgreSQL connection both engines share. A nil value stops the process.
 - `LLM` — Your LLM provider function
-- `WebsiteName` and `WebsiteAddress` — Optionally written into the built-in system prompt
+- `WebsiteName` and `WebsiteAddress` on the chat config — Written into the built-in system prompt
 
 Everything else uses defaults. The package generates the system prompt automatically with parsing rules built-in. For customization, see the [Configuration](./config.md) page.
 
+::: info
+`WebsiteName` and `WebsiteAddress` are written into the built-in system prompt. Leave either one empty and that part stays generic. The package already includes the copy-block, citation, and handoff markers, so you do not write those rules yourself.
+:::
+
 ---
 
-## Step 4 — Add a route and ask a question
+## Step 3 — Add a route and ask a question
 
 Create an HTTP endpoint. Inject the engine as a dependency:
 
@@ -108,6 +95,7 @@ func newAskHandler(engine *aisupport.Engine) http.HandlerFunc {
                 ID:   fmt.Sprintf("%d", user.ID),
             },
             Question: req.Question,
+            Client:   aisupport.ClientWebsite,
         })
         if err != nil {
             http.Error(w, err.Error(), http.StatusBadRequest)
