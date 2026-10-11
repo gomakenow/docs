@@ -252,10 +252,10 @@ Parses a preset ("7", "30", "60", "90", "365", "730", "all") into a time window.
 ### GenerateAnalyticsReport
 
 ```go
-report, err := aisupport.GenerateAnalyticsReport(ctx context.Context, db *gorm.DB, window analytics.Window, llm LLMFunc) (string, error)
+report, err := aisupport.GenerateAnalyticsReport(ctx context.Context, db *gorm.DB, window analytics.Window, llm LLMFunc, extra string) (string, error)
 ```
 
-Generates a human-readable summary of analytics for the window.
+Generates a human-readable summary of analytics for the window. `extra` is appended as host notes before the snapshot. Pass `""` when you have none. Use it to add facts the snapshot does not contain, or to tell the model what else to mention.
 
 ---
 

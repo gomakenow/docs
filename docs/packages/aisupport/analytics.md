@@ -202,25 +202,16 @@ Let the LLM read the snapshot and write a human-friendly report:
 ```go
 window, _ := aisupport.ParseAnalyticsWindow("30", time.Now())
 
-report, err := aisupport.GenerateAnalyticsReport(ctx, db, window, callOpenRouter)
+notes := "In the volume paragraph, mention that 40% of conversations started on the docs."
+report, err := aisupport.GenerateAnalyticsReport(ctx, db, window, callOpenRouter, notes)
 if err != nil {
     return err
 }
-
-fmt.Println(report)
-// Output example:
-// "Support chat handled 1,243 conversations over 30 days.
-//  User satisfaction is strong: 87% of rated answers got thumbs up.
-//  The AI successfully answered 88% of questions without escalation.
-//  88% of answers cited documentation, showing effective knowledge retrieval.
-//  34% of users returned for follow-up conversations."
 ```
 
-The `GenerateAnalyticsReport` function:
-1. Loads the snapshot for the window
-2. Formats metrics into a natural-language prompt
-3. Calls your LLM to write a summary
-4. Returns human-readable text
+::: info
+The last argument is host notes. Pass `""` when you have none. The built-in instructions stay. Notes are placed before the JSON snapshot, so you can add facts the snapshot does not contain or tell the model what else to mention.
+:::
 
 Use reports for:
 - **Weekly summaries** — Email to your team every Monday
