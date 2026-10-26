@@ -5,7 +5,7 @@ hero:
   name: GoMakeNow
   text: A Go boilerplate
   tagline: Scaffold the repo and query, payment, mailing, storage, discount, auth, and acl are already in it. You write routes, models, and product rules — not list engines or Stripe clients.
-  actions:
+  actions:  
     - theme: brand
       text: Get started
       link: /guide/getting-started

@@ -138,6 +138,19 @@ export default defineConfig({
             ],
           },
           {
+            text: 'Router',
+            collapsed: true,
+            items: [
+              { text: 'Getting started', link: '/packages/router/' },
+              { text: 'Chaining', link: '/packages/router/chaining' },
+              { text: 'Groups', link: '/packages/router/groups' },
+              { text: 'Middleware and rate limits', link: '/packages/router/middleware' },
+              { text: 'CORS and roots', link: '/packages/router/cors' },
+              { text: 'Reference', link: '/packages/router/reference' },
+              { text: 'Testing', link: '/packages/router/testing' },
+            ],
+          },
+          {
             text: 'AI Support',
             collapsed: true,
             items: [
