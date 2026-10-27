@@ -1,69 +1,82 @@
 ---
 title: Publishing tools
-description: Publish an existing route as an MCP tool, shape its arguments, and name it.
+description: How AsMcpTool turns a route into a tool, how its arguments reach your handler, and the rules a tool must follow.
 ---
 
 # Publishing tools
 
-<Badge type="warning" text="Requires ACL" />
+A tool is a route. You do not write a second handler for the agent. When you publish a route, the package reads its method and path, builds a description of its arguments from a struct, and shows both to the agent. When the agent calls the tool, the package turns the arguments into an ordinary HTTP request and sends it to that same route, inside your server.
 
-A tool is a route. You do not write a second handler for the agent. `AsMcpTool` reads the method and path from the route, reads the arguments from an input struct, and forwards each call to the route with the agent's token.
+```go
+r := mux.NewRouter()
 
-Publish only routes that enforce an ACL check. The agent's token alone does not decide what is allowed.
+route := r.HandleFunc("/admin/tickets", listTickets)
+route.Methods(http.MethodGet)
+
+addTool := mcpEngine.AsMcpTool(mcp.Tool{
+    Name:        "list_tickets",
+    Description: "List support tickets",
+    Input:       ListTicketsInput{},
+})
+addTool(route)
+```
+
+This page covers what `AsMcpTool` reads, how arguments are placed on the request, and what makes a tool invalid.
 
 ---
 
-## Publish a route
-
-Chain `.AsMcpTool` on the route, after `.Methods` and `.RequirePermission`:
+## What AsMcpTool does
 
 ```go
-type ReplyTicketInput struct {
-    ID      string `json:"id" jsonschema:"ticket id"`
-    Content string `json:"content" jsonschema:"reply text"`
-}
-
-r.HandleFunc("/admin/tickets/{id}/reply", replyTicket).
-    Methods(http.MethodPost).
-    RequirePermission(acl.TicketReply).
-    AsMcpTool(mcp.Tool{
-        Name:        "reply_ticket",
-        Description: "Reply to a support ticket",
-        Input:       ReplyTicketInput{},
-    })
+func (e *Engine) AsMcpTool(spec Tool) func(*mux.Route)
 ```
 
-The engine reads two things from the route:
-- **Method** — Must be exactly one, such as `POST`
-- **Path** — Must be absolute, such as `/admin/tickets/{id}/reply`
+`AsMcpTool` returns a function that takes a `*mux.Route`. You call that function with the route once, while the server is starting.
 
-`AsMcpTool` does not add an access check. The `RequirePermission` check on the route does the gating. Chain it before `AsMcpTool`. The agent must hold that permission through its ACL setup, or the call is rejected.
+When you call it, it:
 
-::: warning
-A bad route spec panics at startup. `AsMcpTool` cannot return an error, so the process will not boot with a bad spec. Fix the route and restart. The previous process keeps serving the old tool list until then.
-:::
+1. Reads the route's **method** and **path**.
+2. Checks the `Input` struct and builds the argument schema from it.
+3. Registers the tool under its `Name`.
+
+`AsMcpTool` does not touch the route's handler. It does not add an access check either. Your route keeps whatever middleware and checks it already has, and those run on every tool call because the call is forwarded through your router.
+
+### What it needs from the route
+
+| From the route | Rule |
+|---|---|
+| Method | Exactly one, and it must be `GET`, `HEAD`, `DELETE`, `POST`, `PUT` or `PATCH` |
+| Path | An absolute path starting with `/`, with no `?` in it. Path parameters like `{id}` are fine |
+
+The function `AsMcpTool` returns has no error result. When the tool is not valid, it **panics**, and the message names the tool. This happens at startup, so a bad tool stops the server from booting. It never turns into a failed call later.
+
+The method has to be set on the route before you call the function, because that is when the package reads it.
 
 ---
 
-## Input struct
+## The tool
 
-`Input` is a zero value of the request struct:
+`mcp.Tool` has three fields you fill in for `AsMcpTool`:
 
-```go
-Input: ReplyTicketInput{}
-```
+| Field | What it is | Rules |
+|---|---|---|
+| `Name` | The name the agent sees | 1 to 128 characters. Letters, digits, `_`, `-` and `.` only. Must be unique |
+| `Description` | What the tool does, in words the agent reads | Required. Cannot be blank |
+| `Input` | A value of the struct that describes the arguments | `nil` means the tool takes no arguments |
 
-- `json` names are the argument names. The agent sends them, and they become the keys of the forwarded request
-- `jsonschema` is the argument description. It is one string, not a list of options
-- `Input: nil` means the tool takes no arguments
+Two tools with the same name are not allowed. The second registration panics.
+
+`Input` is a value, not a type. Pass `ListTicketsInput{}`, or a pointer to one, and the package reads its type.
 
 ```go
 mcp.Tool{Name: "get_stats", Description: "Get dashboard stats", Input: nil}
 ```
 
-### Required and optional fields
+---
 
-A field without `omitempty` is required in the tool schema. The agent must send it.
+## The input struct
+
+The struct describes the arguments the agent can send. Each exported field becomes one argument.
 
 ```go
 type ListTicketsInput struct {
@@ -72,81 +85,144 @@ type ListTicketsInput struct {
 }
 ```
 
-Here `page` is required and `status` is optional.
+| Part | What it does |
+|---|---|
+| `json:"name"` | The argument's name. It is also the key your handler sees |
+| `json:"name,omitempty"` | Makes the argument optional |
+| `json:"-"` | Leaves the field out |
+| `jsonschema:"..."` | The description the agent reads for this argument |
+| `mcp:"..."` | Where the argument goes on the request. See the next section |
 
-Two rules to know:
+A field without `omitempty` is **required**: the call is rejected before it reaches your route if the argument is missing. In the example, `page` is required and `status` is optional.
 
-- A missing key stays missing when the request is forwarded. An empty string is sent as `""`
-- A handler that decodes into a plain string sees both as empty. Use a pointer when a missing field must not overwrite the stored value
+The `jsonschema` tag is one plain sentence, not a list of options. The whole tag is the description, so write the real accepted values into it, such as `open, closed, or all`.
 
-Name the real accepted values in the description (`open, closed, or all`). Do not use an example the server rejects.
+A few rules apply to the struct:
 
-::: warning
-The `jsonschema` tag must not start with `word=`, such as `disabled=true`. That makes schema generation fail, and the process will not boot. `required:` is fine. `key=value` at the start is not.
-:::
+- Embedded (anonymous) fields are not supported.
+- Two fields cannot share one `json` name.
+- A `jsonschema` tag cannot be empty.
+- A `jsonschema` tag cannot start with `word=`, such as `disabled=true`. The schema library reads that as a setting and fails.
+- The struct has to describe an object. Nested structs are allowed.
+
+When any of these is broken, `AsMcpTool` panics at startup.
+
+### Missing and empty arguments
+
+The package keeps the arguments the way the agent sent them:
+
+| The agent sends | Your handler receives |
+|---|---|
+| The key left out | No key |
+| `"status": ""` | The key, with an empty string |
+
+If your handler decodes into a plain `string` field, both cases look empty. A pointer field (`*string`) tells them apart: `nil` for a missing key, a pointer to `""` for an empty one.
 
 ---
 
-## Argument locations
+## Where each argument goes
 
-The `mcp` tag decides where a field goes on the forwarded request.
+The package builds one HTTP request from the arguments. The `mcp` tag decides which part of the request each field lands in. Without a tag, the package picks a place:
+
+| Field | Where it goes |
+|---|---|
+| Name matches a `{placeholder}` in the path | The path |
+| No tag, on a `GET`, `HEAD` or `DELETE` route | The query string |
+| No tag, on a `POST`, `PUT` or `PATCH` route | The JSON body |
+
+The tag overrides that choice:
 
 | `mcp` tag | Where the field goes |
 |---|---|
-| Omitted, and the name is a `{placeholder}` | Path |
-| Omitted on GET, HEAD, DELETE | Query string |
-| Omitted on POST, PUT, PATCH | JSON body |
-| `path`, `query`, `body` | That location |
-| `body:wireName` | JSON body under `wireName` |
-| `body-root` | The whole JSON body. Only this field, no other body fields |
+| `path` | The path |
+| `query` | The query string |
+| `body` | The JSON body |
+| `body:wireName` | The JSON body, under the key `wireName` |
+| `body-root` | The whole JSON body |
 
-A path field must use the placeholder's name:
+Here is a route with all three places in use:
 
 ```go
-type IDPath struct {
-    ID string `json:"id" mcp:"path" jsonschema:"ticket id"`
+type ReplyTicketInput struct {
+    ID      string `json:"id" jsonschema:"ticket id"`
+    Notify  bool   `json:"notify,omitempty" mcp:"query" jsonschema:"email the customer"`
+    Content string `json:"content" jsonschema:"reply text"`
 }
+
+r := mux.NewRouter()
+
+route := r.HandleFunc("/admin/tickets/{id}/reply", replyTicket)
+route.Methods(http.MethodPost)
+
+addTool := mcpEngine.AsMcpTool(mcp.Tool{
+    Name:        "reply_ticket",
+    Description: "Reply to a support ticket",
+    Input:       ReplyTicketInput{},
+})
+addTool(route)
 ```
 
-Do not put a body field on a `{name}` that is not tagged `path`.
+When an agent calls `reply_ticket` with `id` `42`, `notify` `true`, and `content` `Thanks`, the forwarded request is:
+
+```
+POST /admin/tickets/42/reply?notify=true
+Content-Type: application/json
+
+{"content": "Thanks"}
+```
+
+### Path fields
+
+A field whose `json` name matches a `{placeholder}` goes in the path. The match is by name, so `{id}` needs a field named `id`.
+
+The two sides have to agree, in both directions:
+
+- A field tagged `path` must have a matching `{placeholder}` in the route.
+- A `{placeholder}` in the route must belong to a field. A field that is placed anywhere else is rejected.
+
+The value is escaped before it goes in the URL. A call with an empty or missing path value fails with an error.
+
+### Query fields
+
+Each query field becomes `?name=value`. An empty string is left out. A list becomes the same key repeated: `?tag=a&tag=b`.
+
+### Body fields
+
+Body fields are collected into one JSON object. `body:wireName` renames the key in that object, so your handler can use a different JSON name than the tool does.
+
+A `POST`, `PUT` or `PATCH` call with no body fields still sends `{}` as its body, so a handler that always decodes a body gets valid JSON.
+
+`body-root` makes one field the entire body. It is for a route whose body is a list or a single value instead of an object. It cannot be combined with any other body field.
 
 ---
 
-## Naming
+## What your handler sees
 
-Tool names come from the route. Use this pattern:
+Every tool call reaches your handler as a normal request. The package sets:
 
-- `list_` for a GET collection, such as `list_tickets`
-- `get_` for a GET of one item, such as `get_tickets_id`
-- Otherwise the method (`post_`, `put_`, `patch_`, `delete_`), then the path segments joined with `_`
-- `{id}` becomes `id`. Hyphens become underscores
+- `Authorization: Bearer <the agent's token>`, the same token the agent used on `/mcp`
+- `X-Request-ID`
+- `Content-Type: application/json`, when there is a body
+- `Accept: application/json`
+- A request context with the forward timeout on it
 
-If a nearby tool already breaks the pattern, match it. `reply_ticket` is an example.
+The handler runs the way it does for a browser: the same middleware, the same checks, the same code. The only differences are the two things above: the caller is an agent identified by its token, and the request must be one the package can build.
 
-Names may use letters, digits, `_`, `-`, and `.`. They may be 1 to 128 characters long. A duplicate name panics.
+That second part limits which routes can be tools:
 
----
+| Route behavior | Works as a tool |
+|---|---|
+| Reads JSON or a query string | Yes |
+| Reads only multipart form fields | No. The package sends no multipart body |
+| Needs a logged-in user object and has no path for a machine | No. The agent is a machine, not a user |
 
-## Rules for the handler
-
-The forwarder sends JSON or a query string. Keep the route compatible with that:
-
-- Decode JSON request bodies. A handler that reads only multipart form fields will not see the tool body
-- Prefer JSON for any route you publish
-- Stop work when `r.Context()` is cancelled. That is how the forward timeout stops the database work
-- Do not publish a route that returns a secret. Token creation returns its secret once, and another route that returns one is a leak
-
-Do not publish a route only so an agent can do something your UI cannot. Publish routes that your own users already call through the same access checks.
-
-::: info
-If the handler records who acted, the agent is a machine identity, not a user. Decide how your app records machine actors before you publish the route.
-:::
+When the context is cancelled, the forward timeout has passed. A handler that watches `r.Context()` stops its work then, including database queries.
 
 ---
 
 ## RegisterTool
 
-`RegisterTool` publishes a tool that is not a route. Use it rarely:
+`RegisterTool` publishes a tool that has no route behind it. You give it the method and path yourself, and it returns an error instead of panicking:
 
 ```go
 err := mcpEngine.RegisterTool(mcp.Tool{
@@ -156,28 +232,43 @@ err := mcpEngine.RegisterTool(mcp.Tool{
     Method:      http.MethodGet,
     Route:       "/admin/build-info",
 })
+if err != nil {
+    log.Fatal(err)
+}
 ```
 
-`RegisterTool` returns errors instead of panicking. `RegisterTools` registers a slice and skips names that are already registered.
+`RegisterTools` takes a slice. It skips a name that is already registered and stops at any other error. Tools registered before that error stay registered.
+
+`AsMcpTool` is `RegisterTool` with the method and path read from the route.
+
+---
+
+## How the agent sees your tool
+
+The agent gets the list of tools from `tools/list`. Each entry has the name, the description and a schema built from your input struct. Tools on `GET` and `HEAD` routes are marked read-only.
+
+The list is whatever the running process registered. It does not change until the server restarts with new code.
 
 ---
 
 ## Testing a tool
 
-Handler tests call the handler directly. Add a schema test when a tag or a required field is easy to get wrong. The package tests run on SQLite and do not need your host database:
+A tool is a route, so the handler is tested the way any handler is, by calling it directly. The schema is built when the tool is registered, so a bad struct shows up as a panic in any test that declares the route.
+
+To check the schema on its own, build it from the struct with `jsonschema.ForType`. The package's own tests run on SQLite and do not need your database:
 
 ```bash
 make -C backend/mcp test-mcp
 ```
 
-After a tool change, the tool list the agent sees is the list the running process registered. Restarting the server refreshes it. Restarting only the MCP client does not compile your Go code.
-
 ---
 
-## Next steps
+## What's next
 
-| Page | For |
+| Page | What you'll find |
 |---|---|
-| [Getting started](./index.md) | Setup and first tool call |
-| [Configuration](./config.md) | Settings, cooldown, cleanup |
-| [Reference](./reference.md) | Sentinel errors and admin routes |
+| [Getting started](./index.md) | Setup and a first tool call |
+| [Agents and tokens](./agents.md) | Creating agents and recognising them in your routes |
+| [Tool calls](./calls.md) | What the agent sees, error codes, and the call log |
+| [Configuration](./config.md) | Settings, cooldown, token expiry, log cleanup |
+| [Reference](./reference.md) | Errors, tables, and the admin handler |

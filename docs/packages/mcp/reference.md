@@ -5,9 +5,7 @@ description: Complete API reference for the MCP package.
 
 # Reference
 
-<Badge type="warning" text="Requires ACL" />
-
-This page lists every public method, configuration field, admin route, error, and database table. For explanations and usage, see the other pages.
+This page lists the public methods, config fields, admin handler routes, errors, and database tables. For explanations and usage, see the other pages.
 
 ---
 
@@ -19,7 +17,7 @@ engine, err := mcp.New(db, mcp.Config{
 })
 ```
 
-`mcp.New` performs these steps:
+`mcp.New`:
 1. Returns `ErrNilDB` if `db` is nil
 2. Returns `ErrNilAgentStore` if `AgentStore` is nil
 3. Applies configuration defaults
@@ -34,13 +32,13 @@ The package does not open its own database connection.
 ```go
 type Config struct {
     AgentStore AgentStore     // Required
-    Router     http.Handler   // Optional; set later with Bind
+    Router     http.Handler   // Optional; set later with SetRouter
     Now        func() time.Time
 
-    MaxConcurrentDB       int // Default 10
-    MaxConcurrentForwards int // Default 10
-    ServerName            string // Default "mcp"
-    ServerVersion         string // Default "1.0.0"
+    MaxConcurrentDB       int         // Default 10
+    MaxConcurrentForwards int         // Default 10
+    ServerName            string      // Default "mcp"
+    ServerVersion         string      // Default "1.0.0"
     OnPanic               PanicLogger // Nil logs with log.Printf
 
     MaxConsecutiveFailures int           // Default 5
@@ -69,6 +67,10 @@ type AgentStore interface {
 - `GetAgent` returns `ErrAgentNotFound` for an unknown id
 - `SaveAgent` returns a duplicate-key error when the name is taken
 
+---
+
+## Models
+
 ### Agent
 
 ```go
@@ -81,136 +83,179 @@ type Agent struct {
 }
 ```
 
-`SubjectTypeMachine` is the subject type the package uses for an agent (`"machine"`). Use it if your access system keys on subject type.
+The host owns where agents are stored. The package keeps only the string `ID`.
+
+### Token
+
+```go
+type Token struct {
+    ID         string
+    AgentID    string
+    Name       string
+    ExpiresAt  time.Time
+    LastUsedAt *time.Time
+    RevokedAt  *time.Time
+    CreatedAt  time.Time
+}
+```
+
+The token hash is stored, never the secret. The raw secret is returned once, in `IssuedToken`.
+
+### Log
+
+One row per tool call from a known agent. It holds the agent and token ids, the tool name, the method and route, the status and status code, the duration in milliseconds, the request id, a short argument summary, and a short error summary. It never holds the bearer token or a full request body. See [Tool calls](./calls.md#the-call-log).
+
+### Principal
+
+The agent and token that a valid bearer token resolved to: `AgentID`, `TokenID`, `AgentName`, `TokenName`. See [Agents and tokens](./agents.md#letting-your-routes-recognise-an-agent).
+
+### Panic
+
+What `OnPanic` receives: `Value`, `Stack`, `Source` and `ToolName`. `Err()` formats them as one error. `Source` is one of `PanicSourceHTTP`, `PanicSourceTool` and `PanicSourceForward`. See [Tool calls](./calls.md#panics).
+
+### ToolError
+
+The JSON object an agent gets for a failed call: `code`, `message`, `retry_after_seconds` (optional) and `hint`. The codes are `validation`, `unauthorized`, `forbidden`, `not_found`, `conflict`, `rate_limited`, `cooldown`, `timeout` and `internal`. See [Tool calls](./calls.md#error-codes).
+
+### Constants
+
+| Constant | Value |
+|---|---|
+| `SubjectTypeMachine` | `"machine"`. The subject type for an agent in an access system |
+| `StatusSuccess`, `StatusFailed`, `StatusBlocked`, `StatusRateLimited` | The values of a log row's `status` |
+| `KeyMaxConsecutiveFailures`, `KeyFailureCooldownSeconds`, `KeyMaxResponseChars`, `KeyTokenExpiryDays`, `KeyForwardTimeoutSeconds`, `KeyLogCleanupBatch`, `KeyLogCleanupThreshold` | The settings keys |
+| `Default...` for each limit | The default values, such as `DefaultFailureCooldown` |
 
 ---
 
 ## Engine methods
 
-| Method | Returns | Use |
-|---|---|---|
-| `Bind(parent *acl.Router)` | `*Router` | Attach the ACL router that tool calls are forwarded to. Call once, on the root |
-| `Handler()` | `http.Handler` | The `/mcp` endpoint. Mount it outside user-session middleware |
-| `AdminHandler()` | `http.Handler` | Package admin API. Mount it behind your own admin auth. The package does not check access here |
-| `Authenticate(ctx, rawToken)` | `(Principal, error)` | Resolve a raw bearer token to its agent |
-| `RegisterTool(spec Tool)` | `error` | Publish a tool that is not a route |
-| `RegisterTools(tools []Tool)` | `error` | Register many tools. Skips names already registered |
-| `CleanupLogs(ctx)` | `(LogCleanupResult, error)` | Delete the oldest log rows, when over the threshold |
-| `ForgetAgent(ctx, id)` | `error` | Remove an agent's tokens and failure streak. Logs stay |
+### Setup
 
-`Authenticate` returns a `Principal`. Its `AgentID` is the agent id.
-
-### Router and Route
-
-`Bind` returns a `*Router`, which wraps the ACL router. Gate routes with the ACL check as usual:
-
-| Method | Notes |
+| Method | Purpose |
 |---|---|
-| `HandleFunc`, `Handle`, `PathPrefix`, `NewRoute` | Create a route |
-| `Methods`, `Path`, `Headers`, `Queries`, `Name`, `Handler`, `HandlerFunc`, `Subrouter` | Shape the route |
-| `RequirePermission(perm)` | Gate the route with ACL. Chain before `AsMcpTool` |
-| `AsMcpTool(spec Tool)` | Publish the route as a tool. Panics on a bad spec |
+| `mcp.New(db, cfg) (*Engine, error)` | Build the engine |
+| `SetRouter(http.Handler)` | Set the router tool calls are forwarded to |
+| `Handler() http.Handler` | The `/mcp` endpoint. Checks the agent token itself |
+| `AdminHandler() http.Handler` | Agent, token, setting, and log routes. Mount behind your admin auth |
 
-### Tool
+### Tools
 
-```go
-type Tool struct {
-    Name        string // 1 to 128 characters: letters, digits, _, -, .
-    Description string // Required
-    Input       any    // Zero value of the request struct, or nil
-    Method      string // Set by AsMcpTool; set it yourself with RegisterTool
-    Route       string // Absolute path; set by AsMcpTool; set it yourself with RegisterTool
-}
-```
+| Method | Purpose |
+|---|---|
+| `AsMcpTool(spec Tool) func(*mux.Route)` | Returns a function that publishes the route you give it. Panics on a bad spec |
+| `RegisterTool(spec Tool) error` | Publish a tool that is not a route |
+| `RegisterTools(tools []Tool) error` | Register a slice of tools |
+
+### Agents and tokens
+
+| Method | Purpose |
+|---|---|
+| `CreateAgent(ctx, name, description) (Agent, error)` | Create an agent |
+| `GetAgent(ctx, id) (Agent, error)` | Read an agent |
+| `ForgetAgent(ctx, id) error` | Remove an agent's tokens and failure streak. Log rows stay |
+| `CreateToken(ctx, agentID, name) (IssuedToken, error)` | Issue a token. The secret is returned once |
+| `RotateToken(ctx, agentID, name) (IssuedToken, error)` | Delete every token for the agent, then issue one named `name` |
+| `CurrentToken(ctx, agentID) (*Token, error)` | Read the agent's current token |
+| `RevokeToken(ctx, agentID, tokenID) error` | Revoke a token. It returns `401` at once |
+| `DeleteToken(ctx, agentID, tokenID) error` | Delete a token row |
+| `Authenticate(ctx, rawToken) (Principal, error)` | Resolve a raw bearer token to its agent |
+
+### Settings and logs
+
+| Method | Purpose |
+|---|---|
+| `Settings(ctx) (Settings, error)` | Effective limits: code defaults with settings rows applied |
+| `PutSetting(ctx, key, value int) (Settings, error)` | Write one numeric override and return the effective limits |
+| `CleanupLogs(ctx) (LogCleanupResult, error)` | Delete the oldest log rows when over the threshold |
+
+`LogCleanupResult` has one field, `Deleted int`.
 
 ---
 
-## Panic handling
+## Admin handler routes
 
-```go
-type Panic struct {
-    Value    any
-    Stack    string
-    Source   string // PanicSourceHTTP, PanicSourceTool, or PanicSourceForward
-    ToolName string
-}
-```
+`AdminHandler()` serves these routes. The paths are relative to the mount point. The handler does not check access. Your host must mount it behind its own admin authentication and access checks.
 
-`p.Err()` returns the panic value as an `error`. Use it to send the panic to your error tracker.
-
----
-
-## Admin routes
-
-`AdminHandler()` serves these paths relative to the prefix your host mounts it at. The host chooses the prefix. The package does not check access, so mount it behind your own admin auth.
-
-Creating an agent issues a token named `default`. A secret is returned once, when it is created.
-
-| Method | Path | Notes |
+| Method | Path | Purpose |
 |---|---|---|
-| POST | `/agents` | Create an agent. Response includes the token secret once |
-| GET | `/agents/{id}` | One agent |
-| POST | `/agents/{id}/tokens` | Create a token. Response includes the secret once |
-| GET | `/agents/{id}/tokens` | List tokens. No secrets |
-| DELETE | `/agents/{id}/tokens/{tokenID}` | Revoke a token |
-| GET | `/settings` | Effective settings |
-| PUT | `/settings/{key}` | Body `{"value": 7}` |
-| GET | `/logs` | Tool call log |
+| `POST` | `/agents` | Create an agent. Body `{name, description}`. Returns `201` and the agent. No token is issued |
+| `GET` | `/agents/{id}` | Read an agent |
+| `POST` | `/agents/{id}/tokens` | Issue a token. Body `{name}`. Returns `201`, the token row, and the secret under `token` |
+| `GET` | `/agents/{id}/tokens` | List an agent's tokens. No hash or secret |
+| `DELETE` | `/agents/{id}/tokens/{tokenID}` | Revoke a token. Returns `204` |
+| `GET` | `/settings` | Read effective settings |
+| `PUT` | `/settings/{key}` | Write one setting. Body `{"value": 7}`. Returns the effective settings |
+| `GET` | `/logs` | List call logs, newest first. Query `agent_id` and `limit` (default 50, most 100) |
 
-Your host usually adds routes the package does not provide, such as listing agents and deleting one. For deleting, call `ForgetAgent` and then remove the agent from your own table. Logs stay.
+A request body that has unknown fields, extra data, or is larger than 1 MB gets `400`. Errors are JSON, `{"code": "...", "message": "..."}`. The codes are `validation` (`400`), `not_found` (`404`), `conflict` (`409`) and `internal` (`500`). See [Agents and tokens](./agents.md) for how these routes are used.
+Your host can also use the engine methods directly and expose its own routes. Both are valid.
 
 ---
 
-## Sentinel errors
+## Errors
 
 | Error | Meaning |
 |---|---|
-| `ErrNilDB` | `New` called with a nil database |
-| `ErrNilAgentStore` | `New` called without an `AgentStore` |
-| `ErrNilEngine` | A method called on a nil engine |
-| `ErrNilRouter` | The router passed to `Bind` is nil |
-| `ErrAgentNotFound` | `GetAgent` has no agent with that id. Return this from your store |
-| `ErrAgentExists` | An agent with that name already exists |
-| `ErrEmptyName`, `ErrInvalidName`, `ErrInvalidDescription` | Agent or token input is not valid |
-| `ErrTokenNotFound`, `ErrTokenExists` | Token lookup or creation failed |
+| `ErrNilDB` | `db` is nil in `New` |
+| `ErrNilEngine` | Engine is nil |
+| `ErrNilRouter` | Router is nil |
+| `ErrNilAgentStore` | `AgentStore` is nil in `New` |
+| `ErrEmptyName` | Name is empty |
+| `ErrInvalidName` | Name is invalid |
+| `ErrInvalidDescription` | Description is invalid |
+| `ErrAgentNotFound` | Agent does not exist. Return this from `GetAgent` |
+| `ErrAgentExists` | Agent name is taken |
+| `ErrTokenNotFound` | Token does not exist |
+| `ErrTokenExists` | Token name is taken for this agent |
 | `ErrMissingToken` | No bearer token was sent. Returns `401` |
-| `ErrInvalidToken` | The token does not match any stored hash. Returns `401` |
-| `ErrExpiredToken` | The token is past its expiry. Returns `401` |
-| `ErrRevokedToken` | The token was revoked. Returns `401` |
-| `ErrUnknownSetting` | The settings key does not exist |
-| `ErrInvalidSetting` | The settings value is out of range |
-| `ErrDuplicateTool` | A tool name is already registered |
-| `ErrInvalidTool` | A tool spec is not valid, such as a bad tag or a non-object input |
-| `ErrInvalidRoute` | `AsMcpTool` needs one method and an absolute path |
+| `ErrInvalidToken` | Bearer token does not match. Returns `401` |
+| `ErrExpiredToken` | Token is past `ExpiresAt`. Returns `401` |
+| `ErrRevokedToken` | Token was revoked. Returns `401` |
+| `ErrUnknownSetting` | Settings key does not exist |
+| `ErrInvalidSetting` | Settings value is not allowed |
+| `ErrDuplicateTool` | Tool name is already registered |
+| `ErrInvalidTool` | Tool spec is invalid |
+| `ErrInvalidRoute` | Route is not one method on an absolute path, or its tags do not match |
 
-Import these from `mcp` (for example `mcp.ErrAgentNotFound`). The package re-exports them, so the host does not import the internal errors package.
+---
+
+## Tool call statuses
+
+Every call writes a log row with one of these statuses:
+
+| Status | Meaning | Counts toward cooldown |
+|---|---|---|
+| `success` | The route returned success | Clears the streak |
+| `failed` | The route or the call failed | Yes |
+| `blocked` | The agent is in cooldown | No |
+| `rate_limited` | The call was refused by a limit | No |
 
 ---
 
 ## Database tables
 
-The migration creates four tables. The agents table is not one of them. Your host owns it.
-
-| Table | Purpose |
+| Table | Holds |
 |---|---|
-| `mcp_tokens` | Static agent tokens. Stores only the SHA-256 hash |
-| `mcp_logs` | One row per tool call, including reads and cooldown rejections |
-| `mcp_agent_failures` | Failure streak per agent, for the cooldown |
-| `mcp_settings` | Key/value overrides for the settings in [Configuration](./config.md) |
+| `mcp_tokens` | Token rows. Hash only, never the secret |
+| `mcp_logs` | One row per tool call |
+| `mcp_agent_failures` | Failure streak and cooldown deadline per agent |
+| `mcp_settings` | Settings overrides |
 
-The raw token and full request bodies are never stored in `mcp_logs`. Password-like fields in the argument summary are redacted.
+The package does not create the agents table. Your host owns it.
 
 ---
 
 ## Make targets
 
-| Command | What it does |
+Run from the repository root:
+
+| Command | Purpose |
 |---|---|
-| `make -C backend/mcp migrate-publish` | Copy the package migrations into `db/migrations` |
-| `make migrate-up` | Apply migrations to the host database |
-| `make -C backend/mcp test-mcp` | Run package tests on SQLite. No host database needed |
-| `make -C backend/mcp test-mcp TestName` | Run one root test |
-| `make -C backend/mcp mcp-migrate-new MIGRATION_NAME=name` | Create empty migration stubs in `mcp/migrations` |
+| `make -C backend/mcp test-mcp` | Run all package tests on SQLite |
+| `make -C backend/mcp test-mcp TestName` | Run one test |
+| `make -C backend/mcp mcp-migrate-new MIGRATION_NAME=name` | Create migration stubs in `backend/mcp/migrations` |
+| `make -C backend/mcp migrate-publish` | Copy package migrations into the app's `db/migrations` |
 
 ---
 
@@ -220,4 +265,6 @@ The raw token and full request bodies are never stored in `mcp_logs`. Password-l
 |---|---|
 | [Getting started](./index.md) | Setup and first tool call |
 | [Publishing tools](./tools.md) | Routes, argument tags, naming |
-| [Configuration](./config.md) | Settings, cooldown, cleanup |
+| [Agents and tokens](./agents.md) | Agent lifecycle, tokens, and recognising an agent |
+| [Tool calls](./calls.md) | Call flow, error codes, call log, panics |
+| [Configuration](./config.md) | Limits, cooldown, token expiry, cleanup |

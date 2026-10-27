@@ -1,18 +1,13 @@
 ---
 title: Getting started
-description: Why MCP matters, what the mcp package gives you, and five steps to run an MCP server that calls your routes.
+description: What MCP is, what the mcp package gives you, and five steps to run an MCP server that calls your routes.
 ---
 
 # Getting started
 
 <Badge type="tip" text="Requires migration" />
-<Badge type="warning" text="Requires ACL" />
 
-::: warning Requires the ACL package
-The `mcp` package must be set up with the [`acl`](../acl/) package. `Bind` takes the ACL router, and every published route is gated with the ACL check. Set up `acl` first, then follow this page.
-:::
-
-AI agents are becoming a normal way to run software. People ask an assistant to check open support tickets, look up last week's revenue, or reply to a customer. For that to work, the agent needs a safe way to reach your application. This package gives it one, without you writing a second API.
+AI agents are becoming a normal way to run software. People ask an assistant to check open support tickets, look up recent errors, or reply to a customer. For that to work, the agent needs a safe way to reach your application. This package gives it one, without you writing a second API.
 
 ## What is MCP?
 
@@ -27,8 +22,8 @@ Without MCP, you have two bad options:
 
 The `mcp` package avoids both. It turns your existing HTTP routes into MCP tools:
 
-- **One code path.** A tool call is forwarded, in process, to the same route a staff user calls. The route's handler, validation, and business logic run once, for both.
-- **Your access rules still decide.** Each published route keeps its ACL check. The package forwards the agent's token, and the route decides what that identity may do.
+- **One code path.** A tool call is forwarded, in process, to the same route a staff user calls. The handler, validation, and business logic run once, for both.
+- **Your rules still decide.** The package does not decide who may act. The route keeps its own access check, and the package forwards the agent's token so that check sees the agent.
 - **Every call is recorded.** Each tool call writes a log row. You can see what an agent asked for and what came back.
 - **Misbehaving agents are contained.** After repeated failures, an agent is cooled down automatically. Its token can be revoked at any time.
 
@@ -41,30 +36,30 @@ Use the `mcp` package when you want an AI agent to act on your application in th
 - An internal assistant answers questions from admin data
 - An external tool, such as a coding assistant, works with your data through a controlled interface
 
-Do not use it as a public API for end users. An agent is a machine with a static token, and its access is set by the access rules your app applies to it. Keep MCP for trusted agents you control.
+Do not use it as a public API for end users. An agent is a machine with a static token. Keep MCP for trusted agents you control.
 
-## What you get
+## What the package does not do
 
-- An MCP endpoint at `/mcp`, with bearer token auth for each agent
-- An admin API to create agents, issue and revoke tokens, and change limits
-- A way to publish any route as a tool with one chained call, `.AsMcpTool`
-- Failure cooldown, token expiry, response size limits, and forward timeouts
-- A call log with redaction, plus a cleanup job for old rows
-- Tests that run on SQLite, without your host database
+The package is host-agnostic. It has no imports from your application and no idea who your users are, what your data model looks like, or how you decide access. Your application supplies those things:
 
-The package is host-agnostic. It does not know about your users, your data model, or your access rules. Your application supplies those. The one exception is the ACL package, which the router binding requires.
+| The package provides | You provide |
+|---|---|
+| The `/mcp` endpoint and bearer token checks | The agent table and an `AgentStore` for it |
+| Tool registration from a route and an input struct | The routes, handlers, and access checks behind each tool |
+| Call logs, failure cooldown, token expiry, size limits | Admin screens or APIs to create agents and tokens |
+| Tables and migrations for tokens, logs, and settings | The migration run and the database connection |
 
 The package has three ideas:
 
-- **Agents** — Machines that call your tools. An agent is not a user. It has its own static bearer token (`mcp_...`).
-- **Tools** — Routes you publish with `.AsMcpTool(...)`. The tool name, arguments, and schema come from the route and its input struct.
-- **`engine.Handler()`** — The `/mcp` endpoint your agent connects to. It checks the token, writes a log row, and forwards the call.
+- **Agents**: Machines that call your tools. An agent is not a user. It has its own static bearer token (`mcp_...`).
+- **Tools**: Routes you publish with `AsMcpTool(...)`. The tool's method and path come from the route. Its arguments come from an input struct.
+- **`engine.Handler()`**: The `/mcp` endpoint your agent connects to. It checks the token, writes a log row, and forwards the call.
 
 In five steps, you run an MCP server and make one tool call.
 
 ---
 
-## Step 1 — Publish the migration
+## Step 1: Publish the migration
 
 The package ships with SQL that creates four tables: tokens, logs, agent failures, and settings. Apply it:
 
@@ -77,16 +72,27 @@ This creates `mcp_tokens`, `mcp_logs`, `mcp_agent_failures`, and `mcp_settings`.
 
 ---
 
-## Step 2 — Give the package an agent store
+## Step 2: Give the package an agent store
 
-An agent is a row in a table you already own. The package only needs two methods to save and find one. Implement `AgentStore`:
+An agent is a row in a table you already own. The package does not know that table, so it asks for two methods through the `AgentStore` interface:
+
+```go
+type AgentStore interface {
+    SaveAgent(ctx context.Context, agent Agent) error
+    GetAgent(ctx context.Context, id string) (Agent, error)
+}
+```
+
+- `SaveAgent` stores a new agent. It returns a duplicate error when the name is already taken
+- `GetAgent` finds an agent by its id. It returns `ErrAgentNotFound` when no agent has that id
+
+The package calls these methods when it needs an agent. Your code decides where the data lives. Implement the interface with your own table:
 
 ```go
 type MachineStore struct {
     DB *gorm.DB
 }
 
-// Use your own table name. GORM would otherwise guess "agents".
 func (s MachineStore) SaveAgent(ctx context.Context, a mcp.Agent) error {
     return s.DB.WithContext(ctx).Table("machines").Create(&a).Error
 }
@@ -101,17 +107,17 @@ func (s MachineStore) GetAgent(ctx context.Context, id string) (mcp.Agent, error
 }
 ```
 
-`GetAgent` must return `mcp.ErrAgentNotFound` for an unknown id. `SaveAgent` must return a duplicate-key error when the name is taken.
-
-::: info
-The `mcp` package does not know about users or your data model. Agent identity lives in a table your app owns. The example uses `machines`; use your own table name.
+::: warning
+`GetAgent` must return `mcp.ErrAgentNotFound` for an unknown id, as the example does. Without it, the package cannot tell "no such agent" from a database failure.
 :::
+
+The example uses `machines`. Use your own table name.
 
 ---
 
-## Step 3 — Create the engine
+## Step 3: Create the engine
 
-Set up the ACL engine first, then call `mcp.New` once at startup. Create the MCP engine, then bind it to the ACL router:
+Call `mcp.New` once at startup, before you register routes:
 
 ```go
 mcpEngine, err := mcp.New(db, mcp.Config{
@@ -124,57 +130,63 @@ if err != nil {
     log.Fatalf("mcp engine: %v", err)
 }
 
-r := mcpEngine.Bind(aclEngine.Bind(mux.NewRouter()))
+r := mux.NewRouter()
 r.Handle("/mcp", mcpEngine.Handler())
+
+mcpEngine.SetRouter(r)
 ```
 
 The engine takes:
-- A database connection. `New` does not open its own
-- `AgentStore` — Required. Step 2
-- `OnPanic` — Optional. Receives every recovered panic. Nil logs with `log.Printf`
 
-`Bind` attaches the ACL router. Tool calls are forwarded to that router, so the ACL check on the target route runs. Call `Bind` once, on the root router, before you add routes.
+| Part | What it does |
+|---|---|
+| `db` | Your `*gorm.DB`. `New` does not open a connection of its own |
+| `AgentStore` | Required. Step 2 |
+| `OnPanic` | Optional. Receives every panic the package recovers. When it is `nil`, the panic is logged with `log.Printf` |
 
-::: warning
-Mount `/mcp` outside your user-session middleware. The package checks the agent token itself. Do not put a short write timeout or a buffering proxy in front of `/mcp`. The forward timeout defaults to 90 seconds.
+`Handler()` is the `/mcp` endpoint. It checks the agent token on its own.
+
+`SetRouter` tells the engine which router to forward tool calls to. Call it once the router exists, and before the server handles any tool call. The package does not import your router. You pass it in.
+
+::: info Where /mcp sits
+`/mcp` uses agent tokens, not user sessions, so it is registered outside your user-session middleware. A tool call can run for as long as the forward timeout, which is 90 seconds by default. A short write timeout, or a buffering proxy in front of `/mcp`, ends the connection before the call finishes.
 :::
 
 ---
 
-## Step 4 — Publish a route and create an agent
+## Step 4: Publish a route and create an agent
 
-Publish one route as a tool. Put the route's ACL check before `AsMcpTool`:
+Publish a route by calling the function `AsMcpTool` returns, with the route:
 
 ```go
 type ListTicketsInput struct {
     Page int `json:"page,omitempty" jsonschema:"page number, starts at 1"`
 }
 
-r.HandleFunc("/admin/tickets", listTickets).
-    Methods(http.MethodGet).
-    RequirePermission(acl.TicketList).
-    AsMcpTool(mcp.Tool{
-        Name:        "list_tickets",
-        Description: "List support tickets",
-        Input:       ListTicketsInput{},
-    })
+route := r.Handle("/admin/tickets", requireTicketList(http.HandlerFunc(listTickets)))
+route.Methods(http.MethodGet)
+
+addTool := mcpEngine.AsMcpTool(mcp.Tool{
+    Name:        "list_tickets",
+    Description: "List support tickets",
+    Input:       ListTicketsInput{},
+})
+addTool(route)
 ```
 
-`AsMcpTool` does not add an access check. The `RequirePermission` check on the route does. Keep it on every route you publish. An agent token proves who is calling. The route decides whether that identity may act.
+Here `requireTicketList` stands for the access check your app already puts on that route. `AsMcpTool` does not add one. It only publishes the route.
 
-::: warning
-Do not publish a route that has no access check. Any valid agent token would reach it.
-:::
+A tool call reaches the route through your router, so the route's own checks run on it. The agent's token proves who is calling, and the route decides whether that caller may act. A route with no access check accepts any valid agent token.
 
-Read the [Publishing tools](./tools.md) page before you publish more routes.
+The [Publishing tools](./tools.md) page covers the tool definition in full.
 
-Create the agent through your admin API or your own admin screen. Creating an agent issues a token named `default`. The raw token is returned once. Copy it now. The package stores only its SHA-256 hash.
+Next, create an agent and its first token. [Agents and tokens](./agents.md) shows how, with the admin handler or with the engine's methods. The raw token is shown once, and the package stores only its SHA-256 hash.
 
-Then give the agent the access your ACL setup grants to machine identities, in the same way you grant access to a service account. The package does not manage that access.
+How your routes recognise an agent, and what access it gets, is up to your app. The package does not manage that access. See [Agents and tokens](./agents.md#letting-your-routes-recognise-an-agent).
 
 ---
 
-## Step 5 — Connect a client and call a tool
+## Step 5: Connect a client and call a tool
 
 Point your MCP client at `/mcp` and send the token as a bearer header. For Cursor, add this to `.cursor/mcp.json`:
 
@@ -193,7 +205,7 @@ Point your MCP client at `/mcp` and send the token as a bearer header. For Curso
 
 Replace `localhost:8003` with your server's address and `mcp_YOUR_TOKEN` with the token from Step 4.
 
-To check the endpoint without a client, send the MCP handshake and list the tools:
+To check the endpoint without a client, list the tools:
 
 ```bash
 curl -s http://localhost:8003/mcp \
@@ -203,10 +215,10 @@ curl -s http://localhost:8003/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-The response lists every published tool. Call one with `tools/call`, then read the call log (`mcp_logs`) through your admin API. Each call writes one row, including rejected calls.
+The response lists every published tool. Call one with `tools/call`. Each call writes one row to `mcp_logs`, including rejected calls.
 
 ::: warning
-A missing or invalid token returns `401`. A token that is expired or revoked also returns `401`. Issue a new token through your admin API and update the client config.
+A missing or invalid token returns `401`. A token that is expired or revoked also returns `401`. Issue a new token and update the client config.
 :::
 
 ---
@@ -215,14 +227,16 @@ A missing or invalid token returns `401`. A token that is expired or revoked als
 
 You now have:
 - An MCP endpoint at `/mcp` with bearer token auth
-- A published route that an agent calls, gated by the same ACL check a staff user passes
-- A log row for every call, with the token and full bodies never stored
+- A published route that an agent calls, gated by the same access check a staff user passes
+- A log row for every call, with the raw token never stored
 - Cooldown for an agent that keeps failing
 
 As you grow, read:
-- **Publishing tools** — See [Publishing tools](./tools.md) for naming, argument locations, and schema rules
-- **Configuration** — See [Configuration](./config.md) for limits, token expiry, and log cleanup
-- **Reference** — See [Reference](./reference.md) for admin routes, errors, and tables
+- **Publishing tools**: See [Publishing tools](./tools.md) for naming, argument locations, and schema rules
+- **Agents and tokens**: See [Agents and tokens](./agents.md) for the agent lifecycle and your auth middleware
+- **Tool calls**: See [Tool calls](./calls.md) for the call flow, error codes, and logs
+- **Configuration**: See [Configuration](./config.md) for limits, token expiry, and log cleanup
+- **Reference**: See [Reference](./reference.md) for the admin handler, errors, and tables
 
 ---
 
@@ -231,5 +245,7 @@ As you grow, read:
 | Page | For |
 |---|---|
 | [Publishing tools](./tools.md) | Publishing routes with `AsMcpTool`, argument tags, naming, `RegisterTool` |
+| [Agents and tokens](./agents.md) | Creating agents, issuing and revoking tokens, and recognising an agent in your routes |
+| [Tool calls](./calls.md) | What happens on a call, the errors an agent sees, and the call log |
 | [Configuration](./config.md) | Settings, failure cooldown, token expiry, forward timeout, log cleanup |
-| [Reference](./reference.md) | Admin routes, sentinel errors, database tables, Make targets |
+| [Reference](./reference.md) | Sentinel errors, database tables, Make targets |

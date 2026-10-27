@@ -170,6 +170,8 @@ export default defineConfig({
             items: [
               { text: 'Getting started', link: '/packages/mcp/' },
               { text: 'Publishing tools', link: '/packages/mcp/tools' },
+              { text: 'Agents and tokens', link: '/packages/mcp/agents' },
+              { text: 'Tool calls', link: '/packages/mcp/calls' },
               { text: 'Configuration', link: '/packages/mcp/config' },
               { text: 'Reference', link: '/packages/mcp/reference' },
             ],
