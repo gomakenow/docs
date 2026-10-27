@@ -164,6 +164,16 @@ export default defineConfig({
               { text: 'Reference', link: '/packages/aisupport/reference' },
             ],
           },
+          {
+            text: 'MCP',
+            collapsed: true,
+            items: [
+              { text: 'Getting started', link: '/packages/mcp/' },
+              { text: 'Publishing tools', link: '/packages/mcp/tools' },
+              { text: 'Configuration', link: '/packages/mcp/config' },
+              { text: 'Reference', link: '/packages/mcp/reference' },
+            ],
+          },
         ],
       },
       {
