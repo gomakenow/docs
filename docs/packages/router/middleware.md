@@ -1,6 +1,6 @@
 ---
 title: Middleware and rate limits
-description: What a middleware is, how to write one, and how the built-in RateLimit counts requests.
+description: What a middleware is, how to write one, and how the built-in RateLimit and AllowRequestSize behave.
 ---
 
 # Middleware and rate limits
@@ -78,7 +78,7 @@ r := router.New()
 r.HandleFunc("/reports", reports).Use(requireHeader("X-Api-Key"))
 ```
 
-`router.RateLimit` is built this way.
+`router.RateLimit` and `router.AllowRequestSize` are built this way.
 
 ---
 
@@ -192,3 +192,33 @@ The counters are in the memory of the running process. This has three effects:
 |---|---|---|
 | `limit` | At least 1 | Panics with `router: rate limit must be at least 1` |
 | `window` | Greater than zero | Panics with `router: rate limit window must be positive` |
+
+---
+
+## AllowRequestSize
+
+```go
+func AllowRequestSize(max int64) router.Middleware
+```
+
+`AllowRequestSize` raises the request body cap for one route. The server puts a default cap on every body. A handler cannot raise that cap by wrapping the body in another `http.MaxBytesReader`. This middleware raises it before anything reads the body, then stops the body at `max`.
+
+```go
+r := router.New()
+r.HandleFunc("/media", upload).
+    Methods(http.MethodPost).
+    Use(router.AllowRequestSize(201 << 20)).
+    With(guard.RequirePermission("media.upload"))
+```
+
+The middleware does not read the body, and it does not write a response. When the body is larger than `max`, the read inside the handler fails.
+
+`Use` sits outside `With`, so the cap is raised before a permission step runs. The step can still reject the request, and the handler never reads the body.
+
+Put it on the routes that accept an upload. A group `Use` would raise the cap for every route in that group.
+
+A few details follow from how the cap works:
+
+- The raise applies only while the body is still unread. The middleware runs before the handler, so the body is unread when it runs.
+- A smaller `max` tightens the cap for that route. `0` or less allows no bytes.
+- Passing the same middleware to several routes gives each of them that cap. There is no shared counter.

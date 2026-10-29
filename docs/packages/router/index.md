@@ -135,7 +135,7 @@ A rule that stops the request ends the chain. Later rules do not see it, and the
 |---|---|
 | [Chaining](./chaining) | `Use` and `With` in detail, and when each one runs |
 | [Groups](./groups) | Prefixes, nested groups, and shared rules |
-| [Middleware and rate limits](./middleware) | Writing your own rule, and how `RateLimit` counts |
+| [Middleware and rate limits](./middleware) | Writing your own rule, how `RateLimit` counts, and how `AllowRequestSize` raises the body cap |
 | [CORS and roots](./cors) | Every CORS field, and the not-found and method-not-allowed handlers |
 | [Reference](./reference) | Every type, function, and method |
 | [Testing](./testing) | Running the package tests, and testing your own routes |

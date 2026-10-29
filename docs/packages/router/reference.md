@@ -115,6 +115,16 @@ Allows `limit` requests per `window` for each client address. Returns `429` with
 
 ---
 
+## Request size
+
+```go
+func AllowRequestSize(max int64) Middleware
+```
+
+Raises the server body cap for one route, then stops the body at `max`. Pass it to `Use`. It does not read the body and does not write a response. A smaller `max` tightens the cap. See [Middleware and rate limits](./middleware#allowrequestsize).
+
+---
+
 ## Errors
 
 The package does not return errors from registration. Bad arguments panic at startup, so a broken route stops the process before it serves any request.

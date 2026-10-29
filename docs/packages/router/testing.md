@@ -30,6 +30,7 @@ They cover:
 - CORS: preflight, allowed origin, rejected origin, rejected header
 - Credentials and the origin validator
 - `RateLimit`: the limit, the window, and the per-client count
+- `AllowRequestSize`: a route body larger than the server default, including when a `With` step wraps the handler
 - Bad arguments panicking at startup
 - Not-found and method-not-allowed handlers
 
