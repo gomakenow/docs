@@ -105,13 +105,13 @@ All return `*Route`:
 
 ---
 
-## Rate limit
+## Throttle
 
 ```go
-func RateLimit(limit int, window time.Duration) Middleware
+func Throttle(max float64, burst int, excludePaths []string) Middleware
 ```
 
-Allows `limit` requests per `window` for each client address. Returns `429` with `Retry-After` past the limit. Panics if `limit` is below 1 or `window` is not positive.
+Limits one route or group by client IP. `max` is requests per second. A `burst` above zero replaces the default burst. `excludePaths` are exact request paths that skip the limit and are not counted. `nil` excludes nothing. Pass it to `Use`. Each call has its own counter. The client is `CF-Connecting-IP`, or the host in `RemoteAddr` when that header is absent. Past the limit the answer is `429`. See [Middleware and rate limits](./middleware#throttle).
 
 ---
 

@@ -60,12 +60,12 @@ admin := r.Group("/admin", requireLogin)
 
 admin.HandleFunc("/export", export).
     Methods(http.MethodGet).
-    Use(router.RateLimit(5, time.Minute)).
+    Use(router.Throttle(1, 5, nil)).
     With(requirePermission)
 ```
 
 ```
-request → requireLogin → RateLimit → requirePermission → export
+request → requireLogin → Throttle → requirePermission → export
           (group)        (route Use)  (route With)
 ```
 

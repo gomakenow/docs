@@ -16,16 +16,16 @@ r := router.New()
 api := r.Group("/api", authRequired)
 api.HandleFunc("/tickets", listTickets).
     Methods(http.MethodGet).
-    Use(router.RateLimit(60, time.Minute)).
+    Use(router.Throttle(1, 60, nil)).
     With(guard.RequirePermission("ticket.list"))
 ```
 
-Read it from top to bottom: the group requires a login, the route allows 60 requests a minute, and the user needs `ticket.list`.
+Read it from top to bottom: the group requires a login, the route allows about one request a second after a burst of 60, and the user needs `ticket.list`.
 
 The router gives you three ideas:
 
 - **`Group`** — Shared rules for every route under a path.
-- **`Use`** — A rule that wraps the request, such as a rate limit.
+- **`Use`** — A rule that wraps the request, such as a throttle.
 - **`With`** — A rule that works on the route, such as a permission check.
 
 If a rule only looks at the request, use `Use`. If it needs the route, use `With`. Your own rule's documentation, or its type, tells you which one: a `Middleware` goes in `Use`, a `Step` goes in `With`.
@@ -84,7 +84,7 @@ r.HandleFunc("/health", health).Methods(http.MethodGet)
 ```go
 api.HandleFunc("/tickets", listTickets).
     Methods(http.MethodGet).
-    Use(router.RateLimit(60, time.Minute)).
+    Use(router.Throttle(1, 60, nil)).
     With(guard.RequirePermission("ticket.list"))
 ```
 
@@ -92,7 +92,7 @@ api.HandleFunc("/tickets", listTickets).
 |---|---|
 | `HandleFunc` | Sets the path and the handler |
 | `Methods` | Limits the route to `GET`. Without it, the route answers every method |
-| `Use(RateLimit)` | Allows 60 requests a minute from one client. Past that, the answer is `429` |
+| `Use(Throttle)` | Allows about 1 request a second from one client, after a burst of 60. Past that, the answer is `429` |
 | `With(guard.RequirePermission)` | Checks the permission on every request. Without the permission, the answer is `403` |
 
 Each rule runs in order. A request that fails an earlier rule never reaches the later ones.
@@ -119,13 +119,13 @@ For the `/tickets` route above, a request goes through these stages in order:
 | 1 | The root router applies the CORS policy | A preflight `OPTIONS` request is answered here |
 | 2 | gorilla/mux matches the path and method | No match gives the not-found or method-not-allowed handler |
 | 3 | The group's rules, such as `authRequired` | The rule writes its own response, and nothing after it runs |
-| 4 | The route's `Use` middleware, such as `RateLimit` | `RateLimit` answers `429` with a `Retry-After` header |
+| 4 | The route's `Use` middleware, such as `Throttle` | `Throttle` answers `429` |
 | 5 | The route's `With` steps, such as `guard.RequirePermission` | The step writes its own response |
 | 6 | Your handler | — |
 
 A rule continues the request by calling the next handler. It stops the request by returning without calling it. The status code is whatever the rule writes, so `401` and `403` come from `authRequired` and `guard.RequirePermission`. The router itself only produces `429`, the not-found and method-not-allowed responses, and the CORS preflight answer.
 
-A rule that stops the request ends the chain. Later rules do not see it, and the rate limit counts only the requests that reach it.
+A rule that stops the request ends the chain. Later rules do not see it, and the throttle counts only the requests that reach it.
 
 ---
 
@@ -135,7 +135,7 @@ A rule that stops the request ends the chain. Later rules do not see it, and the
 |---|---|
 | [Chaining](./chaining) | `Use` and `With` in detail, and when each one runs |
 | [Groups](./groups) | Prefixes, nested groups, and shared rules |
-| [Middleware and rate limits](./middleware) | Writing your own rule, how `RateLimit` counts, and how `AllowRequestSize` raises the body cap |
+| [Middleware and rate limits](./middleware) | Writing your own rule, how `Throttle` counts, and how `AllowRequestSize` raises the body cap |
 | [CORS and roots](./cors) | Every CORS field, and the not-found and method-not-allowed handlers |
 | [Reference](./reference) | Every type, function, and method |
 | [Testing](./testing) | Running the package tests, and testing your own routes |

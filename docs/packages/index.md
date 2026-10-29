@@ -12,7 +12,7 @@ Most of these are **folders in the scaffolded repo**, same Go module as your `ha
 |---|---|---|
 | [Auth](./auth/) | Session JWTs, password login, reset/verify links, TOTP, OAuth CSRF, HTTP middleware | Users table, HTTP routes, emails, Google/GitHub, roles |
 | [ACL](./acl/) | RBAC: a permission catalog, roles for people and machines, direct grants for people, `Can()` | Users/tenants, HTTP, optional tenant FKs |
-| [Router](./router/) | gorilla/mux with a chain: `Use` for middleware, `With` for steps, groups, CORS, rate limit, request size | Routes, handlers, the middleware and steps you choose |
+| [Router](./router/) | gorilla/mux with a chain: `Use` for middleware, `With` for steps, groups, CORS, throttle, request size | Routes, handlers, the middleware and steps you choose |
 | [MCP](./mcp/) | Agent tokens, `/mcp` endpoint, publish routes as tools, call logs, cooldown | Agent table, routes to publish, access checks on those routes |
 | [Query](./query/) | Cursor lists: filter, search, sort | Routes, GORM models, JSON transformers |
 | [storage](./storage/) | Local / S3 drivers, public vs private URLs | Upload HTTP, serving files, access control |

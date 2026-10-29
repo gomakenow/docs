@@ -1,6 +1,6 @@
 ---
 title: Middleware and rate limits
-description: What a middleware is, how to write one, and how the built-in RateLimit and AllowRequestSize behave.
+description: What a middleware is, how to write one, and how the built-in Throttle and AllowRequestSize behave.
 ---
 
 # Middleware and rate limits
@@ -78,7 +78,7 @@ r := router.New()
 r.HandleFunc("/reports", reports).Use(requireHeader("X-Api-Key"))
 ```
 
-`router.RateLimit` and `router.AllowRequestSize` are built this way.
+`router.Throttle` and `router.AllowRequestSize` are built this way.
 
 ---
 
@@ -102,96 +102,65 @@ r.HandleFunc("/export", export).Methods(http.MethodGet).Use(audit)
 
 ---
 
-## RateLimit
+## Throttle
 
 ```go
-func RateLimit(limit int, window time.Duration) router.Middleware
+func Throttle(max float64, burst int, excludePaths []string) router.Middleware
 ```
 
-`RateLimit` is a middleware that limits how many requests one client can make in a period of time.
+`max` is requests per second. `burst` is how many requests can arrive at once before that rate applies. A `burst` of `0` keeps the default, which is at least 1 and otherwise equal to `max`. A client's entry expires after one minute. Pass the result to `Use`.
+
+`excludePaths` are request paths that skip the limit and are not counted. The match is exact. `nil` excludes nothing.
 
 ```go
 r := router.New()
+r.Use(router.Throttle(180, 180, []string{"/mcp"}))
+
 r.HandleFunc("/contact", contact).
     Methods(http.MethodPost).
-    Use(router.RateLimit(10, time.Minute))
+    Use(router.Throttle(1, 10, nil))
 ```
 
-This allows 10 requests per minute from each client. The 11th request in that minute gets this answer instead of reaching `contact`:
+This allows a burst of 10, then about one request a second from each client. The next request gets `429` and never reaches `contact`:
 
 ```
 HTTP/1.1 429 Too Many Requests
-Retry-After: 60
 
-too many requests
+You have reached maximum request limit.
 ```
-
-### How it counts
-
-The limiter uses a **fixed window**, kept separately for each client.
-
-1. A client's first request opens a window and counts as 1.
-2. Every request after that, until the window ends, adds 1.
-3. While the count is at or under the limit, the request goes through. Over the limit, it gets `429`.
-4. When `window` has passed since the first request, the client's counter is forgotten. The next request opens a new window.
-
-With `RateLimit(3, time.Minute)`, a client that sends requests at seconds 0, 10, 20, 30, and 40 gets this:
-
-| Second | Request | Result |
-|---|---|---|
-| 0 | 1st | Goes through. The window opens |
-| 10 | 2nd | Goes through |
-| 20 | 3rd | Goes through |
-| 30 | 4th | `429` |
-| 40 | 5th | `429` |
-| 60 | 6th | Goes through. A new window opens |
-
-Two details follow from this:
-
-- **The window does not move.** It starts at the first request and ends `window` later. Requests that get a `429` still count, but they do not push the end of the window back.
-- **`Retry-After` is the full window length in seconds**, with a minimum of 1. It does not shrink as the window runs out. For `time.Minute` it is always `60`.
 
 ### What counts as one client
 
-The client is the host part of `RemoteAddr`, so the IP address without the port. All requests from one IP share one counter, whatever port they come from.
+The client is the `CF-Connecting-IP` header when that header is set. Otherwise it is the host part of `RemoteAddr`, so the IP address without the port. All requests from one IP share one counter, whatever port they come from. An address that yields no host is counted as `0.0.0.0`.
 
-`RemoteAddr` is the address of whoever opened the connection to your server. If a reverse proxy sits in front of the server, that is the proxy's address, and every user shares one counter. The limiter does not read `X-Forwarded-For` or any other header.
+`RemoteAddr` is the address of whoever opened the connection to your server. Behind Cloudflare, `CF-Connecting-IP` is the visitor. The limiter does not read `X-Forwarded-For`.
 
-### One counter per RateLimit call
+### One counter per call
 
-Each call to `router.RateLimit(...)` creates its own set of counters. Where you use the result decides what shares them:
+Each call to `router.Throttle` creates its own set of counters. Reuse the middleware value when two routes should share one:
 
 ```go
 r := router.New()
 
-limit := router.RateLimit(60, time.Minute)
+limit := router.Throttle(1, 60, nil)
 r.HandleFunc("/a", a).Use(limit)
 r.HandleFunc("/b", b).Use(limit)
-// /a and /b share one counter. 60 requests a minute across both.
+// /a and /b share one counter.
 
-r.HandleFunc("/c", c).Use(router.RateLimit(60, time.Minute))
-r.HandleFunc("/d", d).Use(router.RateLimit(60, time.Minute))
-// /c and /d each have their own counter. 60 a minute on each.
+r.HandleFunc("/c", c).Use(router.Throttle(1, 60, nil))
+r.HandleFunc("/d", d).Use(router.Throttle(1, 60, nil))
+// /c and /d each have their own counter.
 ```
 
-Passing it to a group shares one counter across every route in that group.
+Passing one `Throttle` result to a group shares that counter across every route in the group.
 
 ### Where the counters live
 
 The counters are in the memory of the running process. This has three effects:
 
-- With two servers behind a load balancer, each one counts on its own, so a client can make the full `limit` on each.
+- With two servers behind a load balancer, each one counts on its own, so a client can spend the full burst on each.
 - A restart clears every counter.
-- A client's entry is removed once its window ends, so memory does not keep growing with old clients.
-
-### Bad arguments
-
-`RateLimit` checks its arguments when you call it, which happens at startup when you declare the route:
-
-| Argument | Rule | If broken |
-|---|---|---|
-| `limit` | At least 1 | Panics with `router: rate limit must be at least 1` |
-| `window` | Greater than zero | Panics with `router: rate limit window must be positive` |
+- A client's entry is removed after one minute, so memory does not keep growing with old clients.
 
 ---
 

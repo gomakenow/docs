@@ -54,8 +54,8 @@ r.HandleFunc("/export", export).
 You can pass several middleware to one `Use`. The first one you pass runs first:
 
 ```go
-Use(requireLogin, router.RateLimit(5, time.Minute))
-// A request goes through requireLogin, then RateLimit, then export.
+Use(requireLogin, router.Throttle(1, 5, nil))
+// A request goes through requireLogin, then Throttle, then export.
 ```
 
 You can also call `Use` more than once. Each call adds to the list, in the order you wrote the calls.
